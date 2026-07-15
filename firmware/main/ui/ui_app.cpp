@@ -6,7 +6,8 @@
 
 namespace codex_island::ui {
 
-void UiApp::begin(AppStateStore *store, uint8_t initial_page) {
+void UiApp::begin(AppStateStore *store, uint8_t initial_page,
+                  uint8_t initial_brightness) {
     store_ = store;
     lv_obj_t *screen = lv_screen_active();
     style_black_surface(screen);
@@ -31,6 +32,7 @@ void UiApp::begin(AppStateStore *store, uint8_t initial_page) {
     usage_.create(tiles_[0]);
     radar_.create(tiles_[1]);
     status_.create(tiles_[2]);
+    status_.set_brightness(initial_brightness);
     for (uint8_t page = 0; page < 3; ++page) {
         create_dots(tiles_[page], page);
     }

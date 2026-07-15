@@ -14,13 +14,17 @@ namespace codex_island::ui {
 
 class UiApp {
 public:
-    void begin(AppStateStore *store, uint8_t initial_page = 0);
+    void begin(AppStateStore *store, uint8_t initial_page = 0,
+               uint8_t initial_brightness = 35);
     void refresh(int64_t monotonic_seconds);
     void tick(int64_t monotonic_seconds);
     void set_page(uint8_t page, bool animate = true);
     void next_page();
     uint8_t current_page() const { return current_page_.load(); }
     bool take_user_activity() { return user_activity_.exchange(false); }
+    bool take_brightness_request(uint8_t &brightness) {
+        return status_.take_brightness_request(brightness);
+    }
     void set_pixel_offset(int8_t x, int8_t y);
 
 private:

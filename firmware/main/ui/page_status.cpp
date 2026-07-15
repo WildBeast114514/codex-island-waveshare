@@ -40,6 +40,66 @@ void StatusPage::create(lv_obj_t *parent) {
     lv_obj_set_style_line_color(trend_, lv_color_hex(kGreen), 0);
     lv_obj_set_style_line_width(trend_, 3, 0);
     lv_obj_set_style_line_rounded(trend_, true, 0);
+
+    lv_obj_t *brightness =
+        make_label(parent, "BRIGHTNESS", &lv_font_montserrat_14, kMuted);
+    lv_obj_set_pos(brightness, 127, 390);
+    brightness_value_ =
+        make_label(parent, "35%", &lv_font_montserrat_14, kCyan);
+    lv_obj_set_pos(brightness_value_, 301, 390);
+    lv_obj_set_width(brightness_value_, 38);
+    lv_obj_set_style_text_align(brightness_value_, LV_TEXT_ALIGN_RIGHT, 0);
+
+    brightness_slider_ = lv_slider_create(parent);
+    lv_obj_set_pos(brightness_slider_, 127, 417);
+    lv_obj_set_size(brightness_slider_, 212, 6);
+    lv_obj_set_ext_click_area(brightness_slider_, 10);
+    lv_slider_set_range(brightness_slider_, 5, 100);
+    lv_slider_set_value(brightness_slider_, 35, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(brightness_slider_, lv_color_hex(kDivider),
+                              LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(brightness_slider_, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(brightness_slider_, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(brightness_slider_, lv_color_hex(kBlue),
+                              LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(brightness_slider_, LV_OPA_COVER,
+                            LV_PART_INDICATOR);
+    lv_obj_set_style_radius(brightness_slider_, LV_RADIUS_CIRCLE,
+                            LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(brightness_slider_, lv_color_hex(kCyan),
+                              LV_PART_KNOB);
+    lv_obj_set_style_bg_opa(brightness_slider_, LV_OPA_COVER, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(brightness_slider_, 7, LV_PART_KNOB);
+    lv_obj_set_style_border_width(brightness_slider_, 2, LV_PART_KNOB);
+    lv_obj_set_style_border_color(brightness_slider_, lv_color_hex(kBlack),
+                                  LV_PART_KNOB);
+    lv_obj_add_event_cb(brightness_slider_, brightness_event,
+                        LV_EVENT_VALUE_CHANGED, this);
+}
+
+void StatusPage::set_brightness(uint8_t brightness) {
+    const int value = std::clamp<int>(brightness, 5, 100);
+    lv_slider_set_value(brightness_slider_, value, LV_ANIM_OFF);
+    lv_label_set_text_fmt(brightness_value_, "%d%%", value);
+}
+
+bool StatusPage::take_brightness_request(uint8_t &brightness) {
+    const int16_t requested = brightness_request_.exchange(-1);
+    if (requested < 0) {
+        return false;
+    }
+    brightness = static_cast<uint8_t>(requested);
+    return true;
+}
+
+void StatusPage::brightness_event(lv_event_t *event) {
+    auto *page = static_cast<StatusPage *>(lv_event_get_user_data(event));
+    if (page == nullptr || page->brightness_slider_ == nullptr) {
+        return;
+    }
+    const int value = lv_slider_get_value(page->brightness_slider_);
+    lv_label_set_text_fmt(page->brightness_value_, "%d%%", value);
+    page->brightness_request_.store(static_cast<int16_t>(value));
 }
 
 void StatusPage::update(const AppState &state, int64_t monotonic_seconds) {

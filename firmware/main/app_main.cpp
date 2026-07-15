@@ -43,6 +43,7 @@ std::atomic<int64_t> g_last_activity{0};
 std::atomic<bool> g_screen_on{true};
 std::atomic<uint8_t> g_configured_brightness{35};
 std::atomic<uint8_t> g_actual_brightness{35};
+std::atomic<int16_t> g_brightness_request{-1};
 
 void ui_tick_task(void *) {
     int64_t last_tick = -1;
@@ -54,6 +55,12 @@ void ui_tick_task(void *) {
         const bool next_page = g_next_page.exchange(false);
         const bool apply_shift = g_apply_shift.exchange(false);
         if (g_ui.take_user_activity()) {
+            g_last_activity.store(now);
+            g_wake_screen.store(true);
+        }
+        uint8_t requested_brightness = 0;
+        if (g_ui.take_brightness_request(requested_brightness)) {
+            g_brightness_request.store(requested_brightness);
             g_last_activity.store(now);
             g_wake_screen.store(true);
         }
@@ -173,6 +180,20 @@ void power_input_task(void *) {
             ESP_LOGI(kTag, "AXP2101 long-press observed; PMIC behavior preserved");
         }
 
+        const int16_t requested_brightness = g_brightness_request.exchange(-1);
+        if (requested_brightness >= 0) {
+            const uint8_t brightness = static_cast<uint8_t>(
+                std::clamp<int>(requested_brightness, 5, 100));
+            g_configured_brightness.store(brightness);
+            if (!g_screen_on.load()) {
+                set_screen_on(true);
+            } else {
+                set_display_brightness(brightness);
+            }
+            ESP_LOGI(kTag, "brightness set to %u%%",
+                     static_cast<unsigned>(brightness));
+        }
+
         if (now_ms - last_power_read_ms >= 5'000) {
             codex_island::PowerState power{};
             if (g_power.read_state(power) == ESP_OK) {
@@ -284,7 +305,7 @@ extern "C" void app_main(void) {
     g_last_activity.store(esp_timer_get_time() / 1'000'000);
 
     ESP_ERROR_CHECK(bsp_display_lock(static_cast<uint32_t>(-1)));
-    g_ui.begin(&g_state, initial_page);
+    g_ui.begin(&g_state, initial_page, initial_brightness);
     const int width = lv_display_get_horizontal_resolution(display);
     const int height = lv_display_get_vertical_resolution(display);
     bsp_display_unlock();
