@@ -15,6 +15,7 @@ constexpr std::array<uint32_t, 5> kRankColors = {kGreen, kLime, kBlue, kPurple, 
 
 void RadarPage::create(lv_obj_t *parent) {
     style_black_surface(parent);
+    lv_obj_add_event_cb(parent, gesture_event, LV_EVENT_GESTURE, this);
     create_badge(parent, 216, 24, 34, kBlue, "o", &lv_font_montserrat_16);
     lv_obj_t *title = make_label(parent, "CODEX RADAR", &lv_font_montserrat_22, kWhite);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 67);
@@ -37,6 +38,20 @@ void RadarPage::create(lv_obj_t *parent) {
         lv_obj_add_flag(dots_[i], LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(names_[i], LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(scores_[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void RadarPage::gesture_event(lv_event_t *event) {
+    auto *page = static_cast<RadarPage *>(lv_event_get_user_data(event));
+    lv_indev_t *input = lv_indev_active();
+    if (page == nullptr || input == nullptr) {
+        return;
+    }
+    const lv_dir_t direction = lv_indev_get_gesture_dir(input);
+    if (direction == LV_DIR_TOP) {
+        page->move_group(1);
+    } else if (direction == LV_DIR_BOTTOM) {
+        page->move_group(-1);
     }
 }
 

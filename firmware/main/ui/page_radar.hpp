@@ -14,6 +14,7 @@ public:
     void move_group(int delta);
 
 private:
+    static void gesture_event(lv_event_t *event);
     void render_rows();
 
     RadarState state_{};

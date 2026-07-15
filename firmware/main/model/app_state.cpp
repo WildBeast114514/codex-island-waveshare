@@ -61,6 +61,7 @@ AppState make_static_mock_state() {
 
     state.link.ble_connected = true;
     state.power.battery_percent = 86;
+    state.power.battery_present = true;
     state.power.charging = false;
     state.power.usb_present = true;
     return state;

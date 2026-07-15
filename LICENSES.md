@@ -1,14 +1,39 @@
-# Third-party licenses and provenance
+# Third-party notices
 
-This project contains an adapted Waveshare example and refers to, but does not vendor, the other source trees listed below. Exact commits are in `reference/LOCKFILE.md`.
+This repository contains original integration and UI code plus adaptations of
+the following open-source projects. Full reference source trees are deliberately
+excluded from Git; exact commits are recorded in `reference/LOCKFILE.md`.
 
-| Material | Project paths | Upstream | License | Adaptation |
-|---|---|---|---|---|
-| ESP-IDF LVGL example | `firmware/CMakeLists.txt`, `firmware/partitions.csv`, `firmware/sdkconfig.defaults`, initial `firmware/main/*` | Waveshare ESP32-S3-Touch-AMOLED-1.75C | Apache-2.0 | Converted from demo entry point into the Codex dashboard while retaining the BSP setup. |
-| BLE NUS design and Codex provider ideas | `firmware/main/transport/*`, `bridge/src/codex_island_bridge/*` | alexjc-tech/cc-island | MIT | Reimplemented for a 2048-byte newline JSON protocol and Codex-only service. |
-| 1.75C PMU/button behavior | `firmware/main/power/*`, `firmware/main/input/*` | vthinkxie/claude-desktop-buddy-esp32 | MIT | Used as behavioral reference only; no low-resolution canvas code is used. |
-| LVGL | managed ESP-IDF component | LVGL | MIT | Unmodified dependency, fixed at 9.5.0. |
-| ESP-IDF | external toolchain/components | Espressif | Apache-2.0 | Unmodified dependency, fixed at 5.5.4. |
+## Waveshare ESP32-S3-Touch-AMOLED-1.75C
 
-Codex and OpenAI names are used only to identify the service. This is an independent project and is not endorsed by OpenAI. No OpenAI logo is included.
+- Source: <https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75C>
+- License: Apache License 2.0.
+- Use: `firmware/` began from `examples/esp-idf/02_lvgl_demo_v9`; display,
+  CST9217 touch and shared-I2C BSP dependencies remain managed components.
+  `firmware/main/power/` adapts AXP2101 register meanings and read behavior
+  documented by the upstream `01_AXP2101` example.
 
+## cc-island
+
+- Source: <https://github.com/alexjc-tech/cc-island>
+- License: MIT.
+- Use: conceptual reference for Codex authentication, session-log accounting,
+  newline-delimited JSON and Nordic UART Service. The bridge was restructured
+  into this project's Codex-only providers and protocol.
+
+## claude-desktop-buddy-esp32
+
+- Source: <https://github.com/vthinkxie/claude-desktop-buddy-esp32>
+- License: MIT.
+- Use: board pin/power behavior reference only. Its low-resolution canvas and
+  application UI were not copied; this firmware renders directly at 466x466.
+
+## ESP-IDF and LVGL
+
+- ESP-IDF: <https://github.com/espressif/esp-idf>, Apache License 2.0.
+- LVGL: <https://github.com/lvgl/lvgl>, MIT License.
+- Use: ESP32-S3 runtime/toolchain, NimBLE, NVS, cJSON, FreeRTOS and LVGL 9.5.
+
+Codex and OpenAI names are used only to identify the compatible local service.
+This project is independent and is not affiliated with or endorsed by OpenAI,
+Waveshare, or CodexRadar.

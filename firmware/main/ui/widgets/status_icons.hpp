@@ -10,7 +10,7 @@ struct BatteryIcon {
     lv_obj_t *terminal = nullptr;
 
     void create(lv_obj_t *parent, int x, int y);
-    void update(uint8_t percent, bool charging);
+    void update(uint8_t percent, bool charging, bool present = true);
 };
 
 lv_obj_t *create_badge(lv_obj_t *parent, int x, int y, int diameter,

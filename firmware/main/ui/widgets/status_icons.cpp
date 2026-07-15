@@ -34,7 +34,16 @@ void BatteryIcon::create(lv_obj_t *parent, int x, int y) {
     lv_obj_clear_flag(terminal, LV_OBJ_FLAG_SCROLLABLE);
 }
 
-void BatteryIcon::update(uint8_t percent, bool charging) {
+void BatteryIcon::update(uint8_t percent, bool charging, bool present) {
+    if (!present) {
+        lv_obj_add_flag(fill, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_border_color(outline, lv_color_hex(kCyan), 0);
+        lv_obj_set_style_bg_color(terminal, lv_color_hex(kCyan), 0);
+        return;
+    }
+    lv_obj_clear_flag(fill, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_border_color(outline, lv_color_hex(kWhite), 0);
+    lv_obj_set_style_bg_color(terminal, lv_color_hex(kWhite), 0);
     const int width = std::max(2, (static_cast<int>(std::min<uint8_t>(percent, 100)) * 19) / 100);
     const uint32_t color = percent < 10 ? kOrange : (charging ? kCyan : kGreen);
     lv_obj_set_width(fill, width);

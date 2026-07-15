@@ -239,6 +239,11 @@ bool parse_radar(cJSON *root, int64_t timestamp, RadarState &radar) {
 
 }  // namespace
 
+void ProtocolProcessor::begin_session() {
+    last_usage_sequence_ = 0;
+    last_radar_sequence_ = 0;
+}
+
 ProcessResult ProtocolProcessor::process_line(const char *line,
                                               int64_t monotonic_seconds,
                                               AppStateStore &store) {

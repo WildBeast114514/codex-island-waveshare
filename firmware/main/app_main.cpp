@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 
@@ -14,7 +15,10 @@
 #include "nvs_flash.h"
 
 #include "model/app_state.hpp"
+#include "input/input_manager.hpp"
+#include "power/power_manager.hpp"
 #include "protocol/protocol.hpp"
+#include "storage/state_cache.hpp"
 #include "transport/ble_nus.hpp"
 #include "ui/ui_app.hpp"
 
@@ -25,7 +29,20 @@ codex_island::AppStateStore g_state;
 codex_island::ui::UiApp g_ui;
 codex_island::protocol::ProtocolProcessor g_protocol;
 codex_island::transport::ble_nus::Line g_protocol_line{};
+codex_island::power::PowerManager g_power;
+codex_island::input::InputManager g_input;
+codex_island::storage::StateCache g_cache;
 std::atomic<bool> g_ui_dirty{false};
+std::atomic<bool> g_next_page{false};
+std::atomic<bool> g_toggle_screen{false};
+std::atomic<bool> g_wake_screen{false};
+std::atomic<bool> g_apply_shift{false};
+std::atomic<int8_t> g_shift_x{0};
+std::atomic<int8_t> g_shift_y{0};
+std::atomic<int64_t> g_last_activity{0};
+std::atomic<bool> g_screen_on{true};
+std::atomic<uint8_t> g_configured_brightness{35};
+std::atomic<uint8_t> g_actual_brightness{35};
 
 void ui_tick_task(void *) {
     int64_t last_tick = -1;
@@ -34,19 +51,49 @@ void ui_tick_task(void *) {
         const int64_t now = esp_timer_get_time() / 1'000'000;
         const bool one_second_elapsed = now != last_tick;
         const bool refresh_requested = g_ui_dirty.exchange(false);
-        if (!one_second_elapsed && !refresh_requested) {
+        const bool next_page = g_next_page.exchange(false);
+        const bool apply_shift = g_apply_shift.exchange(false);
+        if (g_ui.take_user_activity()) {
+            g_last_activity.store(now);
+            g_wake_screen.store(true);
+        }
+        if (!one_second_elapsed && !refresh_requested && !next_page &&
+            !apply_shift) {
             continue;
         }
-        if (bsp_display_lock(100) == ESP_OK) {
-            if (one_second_elapsed) {
-                g_ui.tick(now);
-                last_tick = now;
-            } else {
-                g_ui.refresh(now);
-            }
-            bsp_display_unlock();
+        ESP_ERROR_CHECK(bsp_display_lock(static_cast<uint32_t>(-1)));
+        if (next_page) {
+            g_ui.next_page();
         }
+        if (apply_shift) {
+            g_ui.set_pixel_offset(g_shift_x.load(), g_shift_y.load());
+        }
+        if (one_second_elapsed) {
+            g_ui.tick(now);
+            last_tick = now;
+        } else {
+            g_ui.refresh(now);
+        }
+        bsp_display_unlock();
     }
+}
+
+void set_display_brightness(uint8_t brightness) {
+    if (g_actual_brightness.load() == brightness) {
+        return;
+    }
+    if (bsp_display_lock(static_cast<uint32_t>(-1)) == ESP_OK) {
+        if (bsp_display_brightness_set(brightness) == ESP_OK) {
+            g_actual_brightness.store(brightness);
+        }
+        bsp_display_unlock();
+    }
+}
+
+void set_screen_on(bool enabled) {
+    g_screen_on.store(enabled);
+    set_display_brightness(enabled ? g_configured_brightness.load() : 0);
+    ESP_LOGI(kTag, "display %s", enabled ? "on" : "off");
 }
 
 void set_link_connected(bool connected) {
@@ -62,6 +109,9 @@ void protocol_task(void *) {
         LinkEvent event{};
         while (codex_island::transport::ble_nus::poll_link_event(event)) {
             if (event == LinkEvent::kConnected) {
+                // Sequence numbers are scoped to one BLE central session. A
+                // restarted macOS Bridge intentionally starts from one again.
+                g_protocol.begin_session();
                 set_link_connected(true);
             } else if (event == LinkEvent::kDisconnected) {
                 set_link_connected(false);
@@ -90,6 +140,109 @@ void protocol_task(void *) {
     }
 }
 
+void power_input_task(void *) {
+    uint32_t last_power_read_ms = 0;
+    uint32_t last_cache_check_ms = 0;
+    int64_t last_auto_page = 0;
+    int64_t last_pixel_shift = 0;
+    uint8_t shift_step = 0;
+    while (true) {
+        const int64_t now_seconds = esp_timer_get_time() / 1'000'000;
+        const uint32_t now_ms =
+            static_cast<uint32_t>(esp_timer_get_time() / 1'000);
+        const codex_island::input::ButtonEvents button = g_input.poll(now_ms);
+        if (button.short_press) {
+            g_last_activity.store(now_seconds);
+            g_wake_screen.store(true);
+            g_next_page.store(true);
+        }
+        if (button.double_press) {
+            g_last_activity.store(now_seconds);
+            g_wake_screen.store(true);
+            const bool sent = codex_island::transport::ble_nus::notify_json_line(
+                "{\"v\":1,\"k\":\"refresh\",\"what\":\"all\"}");
+            ESP_LOGI(kTag, "manual refresh request %s",
+                     sent ? "sent" : "not connected");
+        }
+
+        const codex_island::power::PowerKeyEvent power_key = g_power.poll_key();
+        if (power_key == codex_island::power::PowerKeyEvent::kShort) {
+            g_last_activity.store(now_seconds);
+            g_toggle_screen.store(true);
+        } else if (power_key == codex_island::power::PowerKeyEvent::kLong) {
+            ESP_LOGI(kTag, "AXP2101 long-press observed; PMIC behavior preserved");
+        }
+
+        if (now_ms - last_power_read_ms >= 5'000) {
+            codex_island::PowerState power{};
+            if (g_power.read_state(power) == ESP_OK) {
+                g_state.update([&power](codex_island::AppState &state) {
+                    state.power = power;
+                });
+                g_ui_dirty.store(true);
+                ESP_LOGI(kTag, "power: battery=%s%u%% charging=%s usb=%s",
+                         power.battery_present ? "" : "absent/",
+                         power.battery_percent, power.charging ? "yes" : "no",
+                         power.usb_present ? "yes" : "no");
+            }
+            last_power_read_ms = now_ms;
+        }
+
+        if (g_toggle_screen.exchange(false)) {
+            set_screen_on(!g_screen_on.load());
+        }
+        if (g_wake_screen.exchange(false) && !g_screen_on.load()) {
+            set_screen_on(true);
+        }
+
+        const codex_island::AppState snapshot = g_state.snapshot();
+        const int64_t idle_seconds =
+            std::max<int64_t>(0, now_seconds - g_last_activity.load());
+        if (snapshot.power.usb_present) {
+            if (g_screen_on.load()) {
+                set_display_brightness(g_configured_brightness.load());
+            }
+            if (g_screen_on.load() && idle_seconds >= 60 &&
+                now_seconds - last_auto_page >= 15) {
+                g_next_page.store(true);
+                last_auto_page = now_seconds;
+            }
+            if (now_seconds - last_pixel_shift >= 300) {
+                constexpr int8_t offsets[][2] = {
+                    {-1, 0}, {1, 1}, {0, -1}, {-2, 1}, {2, -1}, {0, 0}};
+                const auto &offset = offsets[shift_step % 6];
+                g_shift_x.store(offset[0]);
+                g_shift_y.store(offset[1]);
+                g_apply_shift.store(true);
+                ++shift_step;
+                last_pixel_shift = now_seconds;
+            }
+        } else if (idle_seconds >= 120) {
+            if (g_screen_on.load()) {
+                set_screen_on(false);
+            }
+        } else if (idle_seconds >= 30 && g_screen_on.load()) {
+            set_display_brightness(10);
+        } else if (g_screen_on.load()) {
+            set_display_brightness(g_configured_brightness.load());
+        }
+
+        if (now_ms - last_cache_check_ms >= 10'000) {
+            const esp_err_t saved = g_cache.save_if_changed(
+                g_state.snapshot(), g_ui.current_page(),
+                g_configured_brightness.load());
+            if (saved != ESP_OK) {
+                ESP_LOGW(kTag, "NVS cache update failed: %s",
+                         esp_err_to_name(saved));
+            }
+            ESP_LOGI(kTag, "power/input stack free=%u",
+                     static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+            last_cache_check_ms = now_ms;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
 }  // namespace
 
 extern "C" void app_main(void) {
@@ -101,13 +254,37 @@ extern "C" void app_main(void) {
     }
     ESP_ERROR_CHECK(nvs_result);
 
-    g_state.replace(codex_island::make_static_mock_state());
+    ESP_ERROR_CHECK(g_cache.begin());
+    codex_island::AppState initial_state{};
+    uint8_t initial_page = 0;
+    uint8_t initial_brightness = 35;
+    const bool cache_loaded =
+        g_cache.load(initial_state, initial_page, initial_brightness);
+    g_state.replace(initial_state);
+    g_configured_brightness.store(initial_brightness);
+    g_actual_brightness.store(initial_brightness);
+    ESP_LOGI(kTag, "NVS cache %s", cache_loaded ? "loaded" : "empty");
+
     lv_display_t *display = bsp_display_start();
     ESP_ERROR_CHECK(display == nullptr ? ESP_FAIL : ESP_OK);
-    ESP_ERROR_CHECK(bsp_display_brightness_set(35));
+    ESP_ERROR_CHECK(bsp_display_brightness_set(initial_brightness));
+
+    const esp_err_t power_result = g_power.begin();
+    if (power_result == ESP_OK) {
+        codex_island::PowerState power{};
+        if (g_power.read_state(power) == ESP_OK) {
+            g_state.update([&power](codex_island::AppState &state) {
+                state.power = power;
+            });
+        }
+    } else {
+        ESP_LOGE(kTag, "AXP2101 unavailable: %s", esp_err_to_name(power_result));
+    }
+    ESP_ERROR_CHECK(g_input.begin());
+    g_last_activity.store(esp_timer_get_time() / 1'000'000);
 
     ESP_ERROR_CHECK(bsp_display_lock(static_cast<uint32_t>(-1)));
-    g_ui.begin(&g_state);
+    g_ui.begin(&g_state, initial_page);
     const int width = lv_display_get_horizontal_resolution(display);
     const int height = lv_display_get_vertical_resolution(display);
     bsp_display_unlock();
@@ -137,5 +314,8 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(task_result == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     task_result =
         xTaskCreate(protocol_task, "protocol", 12288, nullptr, 6, nullptr);
+    ESP_ERROR_CHECK(task_result == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
+    task_result =
+        xTaskCreate(power_input_task, "power_input", 12288, nullptr, 4, nullptr);
     ESP_ERROR_CHECK(task_result == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 }

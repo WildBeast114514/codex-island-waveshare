@@ -6,6 +6,7 @@ __pycache__/
 htmlcov/
 *.egg-info/
 *.py[cod]
+bridge/build/
 
 firmware/build/
 firmware/managed_components/

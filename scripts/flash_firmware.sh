@@ -17,4 +17,11 @@ if [[ -z "${IDF_PATH:-}" && -f "$ROOT/reference/esp-idf-v5.5.4/export.sh" ]]; th
   source "$ROOT/reference/esp-idf-v5.5.4/export.sh" >/dev/null
 fi
 
-idf.py -C "$ROOT/firmware" -p "$PORT" flash monitor
+idf.py -C "$ROOT/firmware" -p "$PORT" flash
+if [[ "${MONITOR:-0}" == 1 ]]; then
+  if [[ ! -t 0 ]]; then
+    printf 'MONITOR=1 requires an interactive terminal; flash completed successfully.\n' >&2
+    exit 2
+  fi
+  idf.py -C "$ROOT/firmware" -p "$PORT" monitor
+fi

@@ -60,12 +60,20 @@ void StatusPage::update(const AppState &state, int64_t monotonic_seconds) {
     lv_label_set_text(ble_value_, state.link.ble_connected ? "connected" : "disconnected");
     lv_obj_set_style_text_color(ble_value_,
                                 lv_color_hex(state.link.ble_connected ? kGreen : kMuted), 0);
-    lv_label_set_text_fmt(power_value_, "%s %u%%%s",
-                          state.power.usb_present ? "USB" : "BAT",
-                          state.power.battery_percent,
-                          state.power.charging ? " +" : "");
+    if (!state.power.battery_present) {
+        lv_label_set_text(power_value_, state.power.usb_present ? "USB" : "NO BAT");
+    } else {
+        lv_label_set_text_fmt(power_value_, "%s %u%%%s",
+                              state.power.usb_present ? "USB" : "BAT",
+                              state.power.battery_percent,
+                              state.power.charging ? " +" : "");
+    }
     lv_obj_set_style_text_color(power_value_,
-                                lv_color_hex(state.power.battery_percent < 10 ? kOrange : kWhite), 0);
+                                lv_color_hex(state.power.battery_present &&
+                                                     state.power.battery_percent < 10
+                                                 ? kOrange
+                                                 : kWhite),
+                                0);
 
     const std::size_t count = std::min<std::size_t>(state.radar.trend_count, kTrendPoints);
     if (count == 0) {

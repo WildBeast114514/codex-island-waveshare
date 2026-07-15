@@ -51,6 +51,7 @@ struct LinkState {
 
 struct PowerState {
     uint8_t battery_percent = 0;
+    bool battery_present = false;
     bool charging = false;
     bool usb_present = false;
 };

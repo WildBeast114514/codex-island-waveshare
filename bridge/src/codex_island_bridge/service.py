@@ -227,6 +227,26 @@ class BridgeService:
         if message.get("v") == 1 and message.get("k") == "refresh":
             self.refresh.set()
 
+    async def _wait_for_trigger(self, transport: BleTransport, timeout: float) -> str:
+        refresh_wait = asyncio.create_task(self.refresh.wait())
+        disconnect_wait = asyncio.create_task(transport.wait_for_disconnect())
+        tasks = {refresh_wait, disconnect_wait}
+        try:
+            done, _ = await asyncio.wait(
+                tasks, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+            )
+            if disconnect_wait in done:
+                return "disconnect"
+            if refresh_wait in done:
+                self.refresh.clear()
+                return "refresh"
+            return "timeout"
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     async def collect_usage(self) -> UsageSnapshot:
         return await asyncio.to_thread(self.usage.collect)
 
@@ -301,14 +321,16 @@ class BridgeService:
                         0.0,
                         self.settings.radar_interval_seconds - (now - last_radar_refresh),
                     )
-                    try:
-                        await asyncio.wait_for(self.refresh.wait(), timeout=min(usage_due, radar_due))
-                        self.refresh.clear()
+                    trigger = await self._wait_for_trigger(
+                        transport, min(usage_due, radar_due)
+                    )
+                    if trigger == "disconnect":
+                        LOGGER.info("Peripheral disconnected")
+                        break
+                    if trigger == "refresh":
                         if time.monotonic() - min(last_usage_refresh, last_radar_refresh) < 5:
                             continue
                         usage_due = radar_due = 0
-                    except TimeoutError:
-                        pass
                     now = time.monotonic()
                     if usage_due <= 0 or now - last_usage_refresh >= self.settings.usage_interval_seconds:
                         snapshot = await self.collect_usage()

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.local.codex-island-bridge</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__RUNTIME__/bin/codex-island-bridge</string>
+        <string>run</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__DATA_DIR__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CODEX_RADAR_ALLOW_HTML</key>
+        <string>1</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/CodexIsland/bridge.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/CodexIsland/bridge-error.log</string>
+</dict>
+</plist>

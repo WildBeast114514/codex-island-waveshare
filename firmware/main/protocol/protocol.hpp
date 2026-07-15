@@ -15,6 +15,7 @@ enum class ProcessResult {
 
 class ProtocolProcessor {
 public:
+    void begin_session();
     ProcessResult process_line(const char *line, int64_t monotonic_seconds,
                                AppStateStore &store);
 

@@ -102,7 +102,8 @@ void UsagePage::create(lv_obj_t *parent) {
 }
 
 void UsagePage::update(const AppState &state) {
-    battery_.update(state.power.battery_percent, state.power.charging);
+    battery_.update(state.power.battery_percent, state.power.charging,
+                    state.power.battery_present);
     lv_obj_set_style_text_color(link_, lv_color_hex(state.link.ble_connected ? kWhite : kMuted), 0);
 
     if (!state.usage.valid) {
