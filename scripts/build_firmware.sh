@@ -12,6 +12,7 @@ if [[ -z "${IDF_PATH:-}" ]]; then
   fi
 fi
 
-idf.py -C "$ROOT/firmware" set-target esp32s3
+if [[ ! -f "$ROOT/firmware/sdkconfig" ]] || ! grep -q '^CONFIG_IDF_TARGET="esp32s3"$' "$ROOT/firmware/sdkconfig"; then
+  idf.py -C "$ROOT/firmware" set-target esp32s3
+fi
 idf.py -C "$ROOT/firmware" build
-
