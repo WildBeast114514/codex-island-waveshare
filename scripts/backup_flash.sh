@@ -14,6 +14,7 @@ fi
 
 PYTHON="${IDF_PYTHON_ENV_PATH:+$IDF_PYTHON_ENV_PATH/bin/python}"
 PYTHON="${PYTHON:-python3}"
+BAUD="${ESP_BAUD:-921600}"
 mkdir -p "$ROOT/backups"
 
 "$PYTHON" -m esptool --chip esp32s3 -p "$PORT" chip_id
@@ -30,8 +31,7 @@ case "$flash_info" in
 esac
 
 image="$ROOT/backups/factory-backup-$suffix.bin"
-"$PYTHON" -m esptool --chip esp32s3 -p "$PORT" read_flash 0x0 "$size_hex" "$image"
+"$PYTHON" -m esptool --chip esp32s3 -p "$PORT" -b "$BAUD" read_flash 0x0 "$size_hex" "$image"
 shasum -a 256 "$image" > "$ROOT/backups/factory-backup.sha256"
 printf 'Factory flash backup: %s\n' "$image"
 printf 'Digest: %s\n' "$ROOT/backups/factory-backup.sha256"
-

@@ -25,15 +25,17 @@ uint32_t blend(uint32_t from, uint32_t to, int amount, int range) {
            static_cast<uint32_t>(mix(channel(from, 0), channel(to, 0)));
 }
 
-uint32_t gradient_color(std::size_t index, std::size_t count) {
+uint32_t gradient_color(std::size_t index, std::size_t count,
+                        uint32_t start_color, uint32_t middle_color,
+                        uint32_t end_color) {
     if (count <= 1) {
-        return kGreen;
+        return end_color;
     }
     const int position = static_cast<int>((index * 200) / (count - 1));
     if (position <= 100) {
-        return blend(kBlue, kCyan, position, 100);
+        return blend(start_color, middle_color, position, 100);
     }
-    return blend(kCyan, kGreen, position - 100, 100);
+    return blend(middle_color, end_color, position - 100, 100);
 }
 
 void strip_arc_interaction(lv_obj_t *arc) {
@@ -47,11 +49,16 @@ void strip_arc_interaction(lv_obj_t *arc) {
 
 }  // namespace
 
-void GradientArc::create(lv_obj_t *parent, int x, int y, int size) {
+void GradientArc::create(lv_obj_t *parent, int x, int y, int size,
+                         uint32_t start_color, uint32_t middle_color,
+                         uint32_t end_color) {
     parent_ = parent;
     x_ = x;
     y_ = y;
     size_ = size;
+    start_color_ = start_color;
+    middle_color_ = middle_color;
+    end_color_ = end_color;
 
     track_ = lv_arc_create(parent);
     lv_obj_set_size(track_, size, size);
@@ -80,7 +87,7 @@ void GradientArc::create(lv_obj_t *parent, int x, int y, int size) {
         segments_[i] = segment;
     }
 
-    endpoint_ = make_dot(parent, x, y, 18, kGreen);
+    endpoint_ = make_dot(parent, x, y, 18, end_color_);
     set_value(0);
 }
 
@@ -90,7 +97,9 @@ void GradientArc::set_value(uint8_t percent) {
     for (std::size_t i = 0; i < kSegments; ++i) {
         if (clamped > 0 && i < visible) {
             lv_obj_clear_flag(segments_[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_style_arc_color(segments_[i], lv_color_hex(gradient_color(i, visible)),
+            lv_obj_set_style_arc_color(segments_[i],
+                                       lv_color_hex(gradient_color(
+                                           i, visible, start_color_, middle_color_, end_color_)),
                                        LV_PART_INDICATOR);
         } else {
             lv_obj_add_flag(segments_[i], LV_OBJ_FLAG_HIDDEN);

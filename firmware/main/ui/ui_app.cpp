@@ -50,11 +50,12 @@ void UiApp::tick(int64_t monotonic_seconds) {
     if (store_ == nullptr) {
         return;
     }
-    AppState state = store_->snapshot();
-    if (state.usage.valid && state.usage.reset_seconds > 0) {
-        --state.usage.reset_seconds;
-        store_->replace(state);
-    }
+    store_->update([](AppState &state) {
+        if (state.usage.valid && state.usage.reset_seconds > 0) {
+            --state.usage.reset_seconds;
+        }
+    });
+    const AppState state = store_->snapshot();
     usage_.update(state);
     status_.update(state, monotonic_seconds);
 }

@@ -15,6 +15,8 @@ constexpr std::size_t kTrendPoints = 12;
 
 struct UsageState {
     bool valid = false;
+    bool five_hour_available = false;
+    bool seven_day_available = false;
     uint8_t five_hour_percent = 0;
     uint8_t seven_day_percent = 0;
     uint32_t reset_seconds = 0;
@@ -25,8 +27,8 @@ struct UsageState {
 };
 
 struct RadarModel {
-    char family[16]{};
-    char effort[16]{};
+    char family[32]{};
+    char effort[32]{};
     int16_t iq_x10 = 0;
     uint8_t passed = 0;
     uint8_t total = 0;
@@ -65,6 +67,14 @@ public:
     AppStateStore();
     AppState snapshot() const;
     void replace(const AppState &next);
+
+    template <typename Callback>
+    void update(Callback &&callback) {
+        if (mutex_ != nullptr && xSemaphoreTake(mutex_, portMAX_DELAY) == pdTRUE) {
+            callback(state_);
+            xSemaphoreGive(mutex_);
+        }
+    }
 
 private:
     mutable SemaphoreHandle_t mutex_ = nullptr;

@@ -19,15 +19,14 @@ void format_tokens(char *out, std::size_t size, uint64_t tokens) {
     }
 }
 
-lv_obj_t *make_vertical_divider(lv_obj_t *parent, int height, int x, int y) {
-    lv_obj_t *line = lv_obj_create(parent);
-    lv_obj_set_size(line, 1, height);
-    lv_obj_set_pos(line, x, y);
-    lv_obj_set_style_bg_color(line, lv_color_hex(kDivider), 0);
-    lv_obj_set_style_bg_opa(line, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(line, 0, 0);
-    lv_obj_set_style_pad_all(line, 0, 0);
-    return line;
+lv_obj_t *make_centered_label(lv_obj_t *parent, const char *text,
+                              const lv_font_t *font, uint32_t color,
+                              int x, int y, int width) {
+    lv_obj_t *label = make_label(parent, text, font, color);
+    lv_obj_set_width(label, width);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(label, x, y);
+    return label;
 }
 
 }  // namespace
@@ -41,32 +40,42 @@ void UsagePage::create(lv_obj_t *parent) {
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 39);
     battery_.create(parent, 326, 47);
 
-    arc_.create(parent, 113, 70, 240);
+    five_hour_arc_.create(parent, 55, 78, 144, kBlue, kCyan, kGreen);
+    seven_day_arc_.create(parent, 267, 78, 144, kPurple, kMagenta, kOrange);
 
-    percent_ = make_label(parent, "42", &lv_font_montserrat_48, kWhite);
-    lv_obj_align(percent_, LV_ALIGN_TOP_MID, -8, 129);
-    lv_obj_t *percent_sign = make_label(parent, "%", &lv_font_montserrat_32, kWhite);
-    lv_obj_set_pos(percent_sign, 276, 158);
-    lv_obj_t *window = make_label(parent, "5h window", &lv_font_montserrat_18, kMuted);
-    lv_obj_align(window, LV_ALIGN_TOP_MID, 0, 201);
-    make_divider(parent, 130, 168, 229);
-    reset_ = make_label(parent, "reset in 1h 23m", &lv_font_montserrat_16, kOrange);
-    lv_obj_align(reset_, LV_ALIGN_TOP_MID, 0, 237);
+    five_hour_percent_ = make_centered_label(parent, "42%", &lv_font_montserrat_32,
+                                              kWhite, 63, 119, 128);
+    five_hour_label_ = make_centered_label(parent, "5H", &lv_font_montserrat_16,
+                                            kMuted, 63, 158, 128);
+    five_hour_detail_ = make_centered_label(parent, "reset in 1h 23m",
+                                             &lv_font_montserrat_12, kOrange,
+                                             58, 183, 138);
 
-    waiting_ = make_label(parent, "Waiting for Mac", &lv_font_montserrat_18, kMuted);
-    lv_obj_align(waiting_, LV_ALIGN_TOP_MID, 0, 169);
+    seven_day_percent_ = make_centered_label(parent, "31%", &lv_font_montserrat_32,
+                                              kWhite, 275, 119, 128);
+    seven_day_label_ = make_centered_label(parent, "7 DAY", &lv_font_montserrat_16,
+                                            kMuted, 275, 158, 128);
+    seven_day_detail_ = make_centered_label(parent, "weekly usage",
+                                             &lv_font_montserrat_12, kMagenta,
+                                             270, 183, 138);
+
+    waiting_ = make_centered_label(parent, "Waiting for Mac",
+                                    &lv_font_montserrat_18, kMuted,
+                                    133, 139, 200);
     lv_obj_add_flag(waiting_, LV_OBJ_FLAG_HIDDEN);
 
-    make_divider(parent, 282, 92, 279);
-    weekly_ = make_label(parent, "7 DAY 31%", &lv_font_montserrat_22, kWhite);
-    lv_obj_align(weekly_, LV_ALIGN_TOP_MID, 0, 287);
+    make_divider(parent, 282, 92, 239);
+    lv_obj_t *activity = make_centered_label(parent, "7-DAY ACTIVITY",
+                                              &lv_font_montserrat_14, kMuted,
+                                              133, 248, 200);
+    (void)activity;
 
     constexpr char days[] = {'M', 'T', 'W', 'T', 'F', 'S', 'S'};
     for (std::size_t i = 0; i < kDailyPoints; ++i) {
-        const int x = 147 + static_cast<int>(i) * 25;
+        const int x = 137 + static_cast<int>(i) * 29;
         bars_[i] = lv_obj_create(parent);
-        lv_obj_set_size(bars_[i], 11, 16);
-        lv_obj_set_pos(bars_[i], x, 350);
+        lv_obj_set_size(bars_[i], 13, 16);
+        lv_obj_set_pos(bars_[i], x, 310);
         lv_obj_set_style_radius(bars_[i], 5, 0);
         lv_obj_set_style_border_width(bars_[i], 0, 0);
         lv_obj_set_style_bg_color(bars_[i], lv_color_hex(kBlue), 0);
@@ -77,20 +86,19 @@ void UsagePage::create(lv_obj_t *parent) {
 
         char day[2] = {days[i], '\0'};
         lv_obj_t *label = make_label(parent, day, &lv_font_montserrat_12, kMuted);
-        lv_obj_set_pos(label, x, 374);
+        lv_obj_set_pos(label, x + 1, 333);
     }
 
-    make_divider(parent, 282, 92, 398);
-    create_badge(parent, 149, 408, 32, kBlue, "=", &lv_font_montserrat_18);
+    make_divider(parent, 282, 92, 354);
+    create_badge(parent, 105, 367, 30, kBlue, "=", &lv_font_montserrat_16);
     lv_obj_t *today = make_label(parent, "Today", &lv_font_montserrat_14, kWhite);
-    lv_obj_set_pos(today, 190, 405);
-    tokens_ = make_label(parent, "486K tok", &lv_font_montserrat_20, kWhite);
-    lv_obj_set_pos(tokens_, 190, 422);
+    lv_obj_set_pos(today, 143, 362);
+    tokens_ = make_label(parent, "486K tok", &lv_font_montserrat_18, kWhite);
+    lv_obj_set_pos(tokens_, 143, 380);
 
-    make_vertical_divider(parent, 37, 290, 405);
-    create_badge(parent, 306, 408, 32, kGreen, "$", &lv_font_montserrat_20);
-    cost_ = make_label(parent, "$2.31", &lv_font_montserrat_20, kWhite);
-    lv_obj_set_pos(cost_, 345, 416);
+    create_badge(parent, 271, 367, 30, kGreen, "$", &lv_font_montserrat_18);
+    cost_ = make_label(parent, "$2.31", &lv_font_montserrat_18, kWhite);
+    lv_obj_set_pos(cost_, 309, 373);
 }
 
 void UsagePage::update(const AppState &state) {
@@ -99,24 +107,57 @@ void UsagePage::update(const AppState &state) {
 
     if (!state.usage.valid) {
         lv_obj_clear_flag(waiting_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(percent_, LV_OBJ_FLAG_HIDDEN);
-        arc_.set_value(0);
+        lv_obj_add_flag(five_hour_percent_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(five_hour_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(five_hour_detail_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(seven_day_percent_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(seven_day_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(seven_day_detail_, LV_OBJ_FLAG_HIDDEN);
+        five_hour_arc_.set_value(0);
+        seven_day_arc_.set_value(0);
+        lv_label_set_text(tokens_, "--");
+        lv_label_set_text(cost_, "--");
         return;
     }
 
     lv_obj_add_flag(waiting_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(percent_, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text_fmt(percent_, "%u", state.usage.five_hour_percent);
-    arc_.set_value(state.usage.five_hour_percent);
+    lv_obj_clear_flag(five_hour_percent_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(five_hour_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(five_hour_detail_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(seven_day_percent_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(seven_day_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(seven_day_detail_, LV_OBJ_FLAG_HIDDEN);
 
-    lv_label_set_text_fmt(weekly_, "7 DAY %u%%", state.usage.seven_day_percent);
-    const uint32_t hours = state.usage.reset_seconds / 3600;
-    const uint32_t minutes = (state.usage.reset_seconds % 3600) / 60;
-    if (hours > 0) {
-        lv_label_set_text_fmt(reset_, "reset in %luh %02lum",
-                              static_cast<unsigned long>(hours), static_cast<unsigned long>(minutes));
+    if (state.usage.five_hour_available) {
+        lv_label_set_text_fmt(five_hour_percent_, "%u%%",
+                              state.usage.five_hour_percent);
+        lv_label_set_text(five_hour_detail_, "");
+        const uint32_t hours = state.usage.reset_seconds / 3600;
+        const uint32_t minutes = (state.usage.reset_seconds % 3600) / 60;
+        if (hours > 0) {
+            lv_label_set_text_fmt(five_hour_detail_, "reset in %luh %02lum",
+                                  static_cast<unsigned long>(hours),
+                                  static_cast<unsigned long>(minutes));
+        } else {
+            lv_label_set_text_fmt(five_hour_detail_, "reset in %lum",
+                                  static_cast<unsigned long>(minutes));
+        }
+        five_hour_arc_.set_value(state.usage.five_hour_percent);
     } else {
-        lv_label_set_text_fmt(reset_, "reset in %lum", static_cast<unsigned long>(minutes));
+        lv_label_set_text(five_hour_percent_, "N/A");
+        lv_label_set_text(five_hour_detail_, "limit not reported");
+        five_hour_arc_.set_value(0);
+    }
+
+    if (state.usage.seven_day_available) {
+        lv_label_set_text_fmt(seven_day_percent_, "%u%%",
+                              state.usage.seven_day_percent);
+        lv_label_set_text(seven_day_detail_, "weekly usage");
+        seven_day_arc_.set_value(state.usage.seven_day_percent);
+    } else {
+        lv_label_set_text(seven_day_percent_, "N/A");
+        lv_label_set_text(seven_day_detail_, "limit not reported");
+        seven_day_arc_.set_value(0);
     }
 
     const uint64_t maximum = *std::max_element(state.usage.daily_tokens.begin(),
@@ -125,7 +166,7 @@ void UsagePage::update(const AppState &state) {
         const int height = maximum == 0 ? 8 :
             8 + static_cast<int>((state.usage.daily_tokens[i] * 40) / maximum);
         lv_obj_set_height(bars_[i], height);
-        lv_obj_set_y(bars_[i], 369 - height);
+        lv_obj_set_y(bars_[i], 327 - height);
     }
 
     char token_text[24]{};

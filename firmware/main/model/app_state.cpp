@@ -39,6 +39,8 @@ void set_model(RadarModel &model, const char *family, const char *effort,
 AppState make_static_mock_state() {
     AppState state{};
     state.usage.valid = true;
+    state.usage.five_hour_available = true;
+    state.usage.seven_day_available = true;
     state.usage.five_hour_percent = 42;
     state.usage.seven_day_percent = 31;
     state.usage.reset_seconds = 4980;
