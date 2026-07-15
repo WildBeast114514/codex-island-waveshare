@@ -50,6 +50,9 @@ AppState make_static_mock_state() {
 
     state.radar.valid = true;
     state.radar.stale = false;
+    state.radar.updated_at = 1'700'000'000;
+    std::snprintf(state.radar.updated_label, sizeof(state.radar.updated_label),
+                  "11-15 06:13");
     state.radar.count = 5;
     set_model(state.radar.models[0], "Sol", "max", 1200, 8, 10);
     set_model(state.radar.models[1], "Sol", "xhigh", 1050, 9, 10);

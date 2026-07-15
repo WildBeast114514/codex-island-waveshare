@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from codex_island_bridge.models import RadarModel, RadarSnapshot, UsageSnapshot
 from codex_island_bridge.protocol import MAX_LINE_BYTES, Sequence, radar_line, usage_line
@@ -53,6 +54,7 @@ def test_radar_names_are_dynamic_and_ties_keep_source_order() -> None:
         ),
     )
     message = decoded(radar_line(snapshot, 2))
+    assert re.fullmatch(r"\d{2}-\d{2} \d{2}:\d{2}", message["updated"])
     assert [row[:2] for row in message["models"]] == [
         ["NextGeneration", "max"],
         ["FutureName", "a"],
@@ -63,4 +65,3 @@ def test_radar_names_are_dynamic_and_ties_keep_source_order() -> None:
 def test_sequence_wraps_without_emitting_zero() -> None:
     sequence = Sequence(0x7FFFFFFF)
     assert sequence.next() == 1
-

@@ -38,6 +38,7 @@ struct RadarState {
     bool valid = false;
     bool stale = true;
     int64_t updated_at = 0;
+    char updated_label[20]{};
     uint8_t count = 0;
     std::array<RadarModel, kMaxRadarModels> models{};
     std::array<int16_t, kTrendPoints> trend_iq_x10{};

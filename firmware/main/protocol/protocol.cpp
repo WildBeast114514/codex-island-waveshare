@@ -182,9 +182,11 @@ bool parse_usage(cJSON *root, int64_t timestamp, UsageState &usage) {
 
 bool parse_radar(cJSON *root, int64_t timestamp, RadarState &radar) {
     const cJSON *stale = cJSON_GetObjectItemCaseSensitive(root, "stale");
+    const cJSON *updated = cJSON_GetObjectItemCaseSensitive(root, "updated");
     const cJSON *models = cJSON_GetObjectItemCaseSensitive(root, "models");
     const cJSON *trend = cJSON_GetObjectItemCaseSensitive(root, "trend");
-    if (!cJSON_IsBool(stale) || !cJSON_IsArray(models) ||
+    if (!cJSON_IsBool(stale) || !cJSON_IsString(updated) ||
+        updated->valuestring == nullptr || !cJSON_IsArray(models) ||
         !cJSON_IsArray(trend)) {
         return false;
     }
@@ -199,6 +201,9 @@ bool parse_radar(cJSON *root, int64_t timestamp, RadarState &radar) {
     parsed.valid = true;
     parsed.stale = cJSON_IsTrue(stale);
     parsed.updated_at = timestamp;
+    if (!copy_utf8(parsed.updated_label, updated->valuestring)) {
+        return false;
+    }
     parsed.count = static_cast<uint8_t>(model_count);
     for (int index = 0; index < model_count; ++index) {
         const cJSON *tuple = cJSON_GetArrayItem(models, index);

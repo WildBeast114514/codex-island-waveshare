@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from .models import RadarSnapshot, UsageSnapshot
@@ -59,12 +60,14 @@ def usage_line(snapshot: UsageSnapshot, seq: int, *, now: int | None = None) -> 
 
 def radar_line(snapshot: RadarSnapshot, seq: int) -> bytes:
     ordered = sorted(snapshot.models, key=lambda model: (-model.iq_x10, model.source_order))
+    updated = datetime.fromtimestamp(snapshot.updated_at).astimezone().strftime("%m-%d %H:%M")
     return _line(
         {
             "v": PROTOCOL_VERSION,
             "k": "radar",
             "seq": seq,
             "ts": snapshot.updated_at,
+            "updated": updated,
             "stale": snapshot.stale,
             "models": [
                 [model.family, model.effort, model.iq_x10, model.passed, model.total]
@@ -100,4 +103,3 @@ def mock_snapshots(now: int | None = None) -> tuple[UsageSnapshot, RadarSnapshot
         trend_iq_x10=(900, 1050, 1050, 1200),
     )
     return usage, radar
-

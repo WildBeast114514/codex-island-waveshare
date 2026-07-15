@@ -116,7 +116,9 @@ rm -rf ~/Library/Application\ Support/CodexIsland/bridge-runtime
 ## Controls and power policy
 
 - Swipe left/right or tap a page dot to switch Usage, Radar and Status.
-- Swipe up/down on Radar for additional groups of five models.
+- Scroll up/down inside Radar to browse every IQ model received (up to 24);
+  horizontal swipes still switch pages. The header shows the source data's
+  Mac-local update time.
 - BOOT short press advances a page; double press requests immediate refresh.
 - PWR short press toggles display brightness; PMIC long-press behavior is left intact.
 - USB: 35% brightness, page rotation every 15 seconds after 60 seconds without interaction, and a 1–2 pixel shift every five minutes.
