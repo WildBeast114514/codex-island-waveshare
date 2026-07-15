@@ -21,3 +21,11 @@ python3 -m venv .venv
 Today cost is an estimate based on the centralized public model price table.
 Unknown/private model slugs are reported by name and excluded rather than
 silently priced as another model.
+
+Radar never falls back to mock data in normal operation. Configure either an
+authorized JSON endpoint with `CODEX_RADAR_API_URL` (and optionally
+`CODEX_RADAR_API_TOKEN`) or explicitly enable the low-frequency public-page
+parser with `CODEX_RADAR_ALLOW_HTML=1`. The latter is rate-limited to one
+request per 30 minutes and normally runs hourly. `CODEX_RADAR_PRIMARY_KEY` can
+select the trend model (for example `sol/max`); when a model is renamed or
+removed, trend collection automatically uses the highest IQ in each sample.

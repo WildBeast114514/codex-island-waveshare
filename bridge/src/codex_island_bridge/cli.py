@@ -9,7 +9,7 @@ import sys
 from .ble_transport import BleTransport, discover_devices
 from .config import Settings
 from .protocol import Sequence, mock_snapshots, radar_line, usage_line
-from .service import BridgeService, UsageService
+from .service import BridgeService, RadarService, UsageService
 
 
 async def _devices(timeout: float) -> int:
@@ -52,6 +52,18 @@ def _print_real(settings: Settings) -> int:
     snapshot = UsageService(settings).collect()
     payload = usage_line(snapshot, 1)
     print(json.dumps(json.loads(payload), ensure_ascii=False, indent=2))
+    return 0
+
+
+def _radar_test(settings: Settings) -> int:
+    snapshot = RadarService(settings).collect(force=True)
+    if snapshot is None:
+        print(
+            "Radar is not configured; set CODEX_RADAR_API_URL or CODEX_RADAR_ALLOW_HTML=1",
+            file=sys.stderr,
+        )
+        return 2
+    print(json.dumps(json.loads(radar_line(snapshot, 1)), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -99,9 +111,7 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "run":
             code = asyncio.run(_run(settings))
         elif args.command == "radar-test":
-            _, radar = mock_snapshots()
-            print(json.dumps(json.loads(radar_line(radar, 1)), ensure_ascii=False, indent=2))
-            code = 0
+            code = _radar_test(settings)
         else:
             code = _print_mock()
     except (TimeoutError, ConnectionError, OSError) as error:
