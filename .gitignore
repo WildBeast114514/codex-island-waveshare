@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+*.egg-info/
 *.py[cod]
 
 firmware/build/
@@ -17,4 +18,3 @@ logs/*.log
 
 reference/*
 !reference/LOCKFILE.md
-
