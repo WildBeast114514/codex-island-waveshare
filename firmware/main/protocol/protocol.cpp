@@ -264,6 +264,10 @@ ProcessResult ProtocolProcessor::process_line(const char *line,
         return ProcessResult::kInvalid;
     }
 
+    if (std::strcmp(kind, "heartbeat") == 0) {
+        return ProcessResult::kHeartbeat;
+    }
+
     if (std::strcmp(kind, "usage") == 0) {
         if (sequence <= last_usage_sequence_) {
             store.update([monotonic_seconds](AppState &state) {
@@ -309,6 +313,8 @@ const char *result_name(ProcessResult result) {
             return "usage applied";
         case ProcessResult::kAppliedRadar:
             return "radar applied";
+        case ProcessResult::kHeartbeat:
+            return "heartbeat";
         case ProcessResult::kDuplicate:
             return "duplicate ignored";
         case ProcessResult::kInvalid:

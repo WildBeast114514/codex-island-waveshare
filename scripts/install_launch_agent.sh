@@ -29,7 +29,12 @@ sed -e "s|__RUNTIME__|$RUNTIME|g" \
     "$ROOT/launchd/$LABEL.plist.template" > "$DEST"
 plutil -lint "$DEST"
 launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
-launchctl bootstrap "$DOMAIN" "$DEST"
+if ! launchctl bootstrap "$DOMAIN" "$DEST"; then
+    # launchd can briefly retain the old job after bootout. A short retry is
+    # sufficient and avoids leaving the Bridge unregistered after an update.
+    sleep 1
+    launchctl bootstrap "$DOMAIN" "$DEST"
+fi
 launchctl enable "$DOMAIN/$LABEL"
 launchctl kickstart -k "$DOMAIN/$LABEL"
 echo "Installed and started $DOMAIN/$LABEL"

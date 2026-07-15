@@ -14,7 +14,7 @@ from .codex_sessions import CodexSessionAggregator
 from .codex_usage import CodexUsageProvider, UsageProviderError
 from .config import Settings
 from .models import RadarModel, RadarSnapshot, UsageSnapshot
-from .protocol import Sequence, radar_line, usage_line
+from .protocol import Sequence, heartbeat_line, radar_line, usage_line
 from .radar import (
     AuthorizedApiRadarProvider,
     HtmlRadarProvider,
@@ -261,6 +261,9 @@ class BridgeService:
     async def send_radar(self, transport: BleTransport, snapshot: RadarSnapshot) -> None:
         await transport.send_line(radar_line(snapshot, self.sequence.next()))
 
+    async def send_heartbeat(self, transport: BleTransport) -> None:
+        await transport.send_line(heartbeat_line(self.sequence.next()))
+
     async def once(self) -> UsageSnapshot:
         transport = BleTransport(
             address=self.settings.ble_address,
@@ -311,6 +314,7 @@ class BridgeService:
                     LOGGER.info("Pushed cached Radar")
                 last_usage_refresh = 0.0
                 last_radar_refresh = 0.0
+                last_link_activity = time.monotonic()
                 while transport.connected:
                     now = time.monotonic()
                     usage_due = max(
@@ -321,8 +325,13 @@ class BridgeService:
                         0.0,
                         self.settings.radar_interval_seconds - (now - last_radar_refresh),
                     )
+                    heartbeat_due = max(
+                        0.0,
+                        self.settings.heartbeat_interval_seconds
+                        - (now - last_link_activity),
+                    )
                     trigger = await self._wait_for_trigger(
-                        transport, min(usage_due, radar_due)
+                        transport, min(usage_due, radar_due, heartbeat_due)
                     )
                     if trigger == "disconnect":
                         LOGGER.info("Peripheral disconnected")
@@ -336,13 +345,22 @@ class BridgeService:
                         snapshot = await self.collect_usage()
                         await self.send_usage(transport, snapshot)
                         last_usage_refresh = now
+                        last_link_activity = time.monotonic()
                         LOGGER.info("Pushed current usage")
                     if radar_due <= 0 or now - last_radar_refresh >= self.settings.radar_interval_seconds:
                         radar = await self.collect_radar()
                         if radar is not None:
                             await self.send_radar(transport, radar)
+                            last_link_activity = time.monotonic()
                             LOGGER.info("Pushed current Radar")
                         last_radar_refresh = now
+                    now = time.monotonic()
+                    if (
+                        now - last_link_activity
+                        >= self.settings.heartbeat_interval_seconds
+                    ):
+                        await self.send_heartbeat(transport)
+                        last_link_activity = time.monotonic()
             except asyncio.CancelledError:
                 await transport.disconnect()
                 raise

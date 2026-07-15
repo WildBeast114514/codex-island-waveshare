@@ -20,6 +20,7 @@
 #include "protocol/protocol.hpp"
 #include "storage/state_cache.hpp"
 #include "transport/ble_nus.hpp"
+#include "transport/link_watchdog.hpp"
 #include "ui/ui_app.hpp"
 
 namespace {
@@ -44,6 +45,7 @@ std::atomic<bool> g_screen_on{true};
 std::atomic<uint8_t> g_configured_brightness{35};
 std::atomic<uint8_t> g_actual_brightness{35};
 std::atomic<int16_t> g_brightness_request{-1};
+std::atomic<int64_t> g_last_ble_activity{0};
 
 void ui_tick_task(void *) {
     int64_t last_tick = -1;
@@ -119,6 +121,7 @@ void protocol_task(void *) {
                 // Sequence numbers are scoped to one BLE central session. A
                 // restarted macOS Bridge intentionally starts from one again.
                 g_protocol.begin_session();
+                g_last_ble_activity.store(esp_timer_get_time() / 1'000'000);
                 set_link_connected(true);
             } else if (event == LinkEvent::kDisconnected) {
                 set_link_connected(false);
@@ -134,6 +137,7 @@ void protocol_task(void *) {
             continue;
         }
         const int64_t now = esp_timer_get_time() / 1'000'000;
+        g_last_ble_activity.store(now);
         const codex_island::protocol::ProcessResult result =
             g_protocol.process_line(g_protocol_line.data, now, g_state);
         if (result == codex_island::protocol::ProcessResult::kInvalid) {
@@ -142,7 +146,9 @@ void protocol_task(void *) {
             ESP_LOGI(kTag, "BLE protocol: %s; protocol stack free=%u",
                      codex_island::protocol::result_name(result),
                      static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
-            g_ui_dirty.store(true);
+            if (result != codex_island::protocol::ProcessResult::kHeartbeat) {
+                g_ui_dirty.store(true);
+            }
         }
     }
 }
@@ -192,6 +198,15 @@ void power_input_task(void *) {
             }
             ESP_LOGI(kTag, "brightness set to %u%%",
                      static_cast<unsigned>(brightness));
+        }
+
+        if (codex_island::transport::link_needs_recovery(
+                codex_island::transport::ble_nus::is_connected(),
+                g_last_ble_activity.load(), now_seconds) &&
+            codex_island::transport::ble_nus::terminate_connection()) {
+            g_last_ble_activity.store(now_seconds);
+            ESP_LOGW(kTag,
+                     "BLE application traffic timed out; recovering advertisement");
         }
 
         if (now_ms - last_power_read_ms >= 5'000) {

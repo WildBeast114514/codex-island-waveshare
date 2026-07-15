@@ -58,6 +58,17 @@ def usage_line(snapshot: UsageSnapshot, seq: int, *, now: int | None = None) -> 
     )
 
 
+def heartbeat_line(seq: int, *, now: int | None = None) -> bytes:
+    return _line(
+        {
+            "v": PROTOCOL_VERSION,
+            "k": "heartbeat",
+            "seq": seq,
+            "ts": int(time.time()) if now is None else now,
+        }
+    )
+
+
 def radar_line(snapshot: RadarSnapshot, seq: int) -> bytes:
     ordered = sorted(snapshot.models, key=lambda model: (-model.iq_x10, model.source_order))
     updated = datetime.fromtimestamp(snapshot.updated_at).astimezone().strftime("%m-%d %H:%M")

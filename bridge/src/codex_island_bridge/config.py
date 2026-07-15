@@ -21,6 +21,7 @@ class Settings:
     codex_sessions_dir: Path
     usage_interval_seconds: int = 300
     radar_interval_seconds: int = 3600
+    heartbeat_interval_seconds: int = 60
     radar_api_url: str | None = None
     radar_api_token: str | None = None
     radar_allow_html: bool = False
@@ -45,6 +46,9 @@ class Settings:
             ),
             usage_interval_seconds=max(30, int(os.environ.get("CODEX_USAGE_INTERVAL", "300"))),
             radar_interval_seconds=max(1800, int(os.environ.get("CODEX_RADAR_INTERVAL", "3600"))),
+            heartbeat_interval_seconds=max(
+                15, int(os.environ.get("CODEX_HEARTBEAT_INTERVAL", "60"))
+            ),
             radar_api_url=os.environ.get("CODEX_RADAR_API_URL") or None,
             radar_api_token=os.environ.get("CODEX_RADAR_API_TOKEN") or None,
             radar_allow_html=_flag("CODEX_RADAR_ALLOW_HTML"),

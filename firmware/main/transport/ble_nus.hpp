@@ -25,5 +25,6 @@ bool poll_link_event(LinkEvent &event);
 bool notify_json_line(const char *json);
 bool request_refresh();
 bool is_connected();
+bool terminate_connection();
 
 }  // namespace codex_island::transport::ble_nus

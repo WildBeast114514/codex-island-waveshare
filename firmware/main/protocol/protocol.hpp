@@ -9,6 +9,7 @@ namespace codex_island::protocol {
 enum class ProcessResult {
     kAppliedUsage,
     kAppliedRadar,
+    kHeartbeat,
     kDuplicate,
     kInvalid,
 };

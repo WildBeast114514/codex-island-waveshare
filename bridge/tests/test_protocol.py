@@ -4,7 +4,13 @@ import json
 import re
 
 from codex_island_bridge.models import RadarModel, RadarSnapshot, UsageSnapshot
-from codex_island_bridge.protocol import MAX_LINE_BYTES, Sequence, radar_line, usage_line
+from codex_island_bridge.protocol import (
+    MAX_LINE_BYTES,
+    Sequence,
+    heartbeat_line,
+    radar_line,
+    usage_line,
+)
 
 
 def decoded(line: bytes) -> dict:
@@ -65,3 +71,12 @@ def test_radar_names_are_dynamic_and_ties_keep_source_order() -> None:
 def test_sequence_wraps_without_emitting_zero() -> None:
     sequence = Sequence(0x7FFFFFFF)
     assert sequence.next() == 1
+
+
+def test_heartbeat_has_no_data_timestamp_side_effects() -> None:
+    assert decoded(heartbeat_line(7, now=1_234)) == {
+        "v": 1,
+        "k": "heartbeat",
+        "seq": 7,
+        "ts": 1_234,
+    }

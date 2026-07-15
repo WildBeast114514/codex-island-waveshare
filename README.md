@@ -78,6 +78,15 @@ CODEX_RADAR_ALLOW_HTML=1 .venv/bin/codex-island-bridge radar-test
 .venv/bin/pytest -q bridge/tests
 ```
 
+The background Bridge collects and pushes Codex usage every 300 seconds and
+Radar every 3600 seconds. It also sends a data-neutral BLE heartbeat every 60
+seconds; heartbeats do not change the Status page's `Last sync` time. If an
+apparently connected central sends no application traffic for 180 seconds, the
+firmware terminates the stale link and resumes advertising. This recovers the
+half-open CoreBluetooth state that can otherwise remain after a Mac sleeps.
+The intervals can be overridden with `CODEX_USAGE_INTERVAL`,
+`CODEX_RADAR_INTERVAL`, and `CODEX_HEARTBEAT_INTERVAL`.
+
 The usage endpoint's windows are classified by `limit_window_seconds`, not by
 their `primary`/`secondary` position. If the service does not expose a 5-hour
 window, the left ring says `N/A / limit not reported`; a weekly primary window

@@ -35,7 +35,7 @@ Line g_assembling{};
 std::size_t g_assembling_length = 0;
 bool g_dropping_overflow = false;
 uint16_t g_tx_handle = 0;
-uint16_t g_connection_handle = BLE_HS_CONN_HANDLE_NONE;
+std::atomic<uint16_t> g_connection_handle{BLE_HS_CONN_HANDLE_NONE};
 uint8_t g_address_type = 0;
 char g_device_name[32] = "Codex Island";
 std::atomic<bool> g_connected{false};
@@ -149,11 +149,12 @@ int gap_event(ble_gap_event *event, void *) {
     switch (event->type) {
         case BLE_GAP_EVENT_CONNECT:
             if (event->connect.status == 0) {
-                g_connection_handle = event->connect.conn_handle;
+                g_connection_handle.store(event->connect.conn_handle);
                 g_connected.store(true);
                 g_subscribed.store(false);
                 queue_event(LinkEvent::kConnected);
-                ESP_LOGI(kTag, "central connected; handle=%u", g_connection_handle);
+                ESP_LOGI(kTag, "central connected; handle=%u",
+                         event->connect.conn_handle);
             } else {
                 ESP_LOGW(kTag, "connection failed; status=%d", event->connect.status);
                 start_advertising();
@@ -161,7 +162,7 @@ int gap_event(ble_gap_event *event, void *) {
             break;
         case BLE_GAP_EVENT_DISCONNECT:
             ESP_LOGI(kTag, "central disconnected; reason=%d", event->disconnect.reason);
-            g_connection_handle = BLE_HS_CONN_HANDLE_NONE;
+            g_connection_handle.store(BLE_HS_CONN_HANDLE_NONE);
             g_connected.store(false);
             g_subscribed.store(false);
             queue_event(LinkEvent::kDisconnected);
@@ -309,7 +310,8 @@ bool notify_json_line(const char *json) {
     if (message == nullptr) {
         return false;
     }
-    return ble_gatts_notify_custom(g_connection_handle, g_tx_handle, message) == 0;
+    return ble_gatts_notify_custom(g_connection_handle.load(), g_tx_handle,
+                                   message) == 0;
 }
 
 bool request_refresh() {
@@ -318,6 +320,20 @@ bool request_refresh() {
 
 bool is_connected() {
     return g_connected.load();
+}
+
+bool terminate_connection() {
+    const uint16_t handle = g_connection_handle.load();
+    if (!g_connected.load() || handle == BLE_HS_CONN_HANDLE_NONE) {
+        return false;
+    }
+    const int result = ble_gap_terminate(handle, BLE_ERR_REM_USER_CONN_TERM);
+    if (result != 0) {
+        ESP_LOGW(kTag, "could not terminate stale connection: %d", result);
+        return false;
+    }
+    ESP_LOGI(kTag, "stale connection termination requested; handle=%u", handle);
+    return true;
 }
 
 }  // namespace codex_island::transport::ble_nus
