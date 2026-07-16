@@ -16,6 +16,7 @@ is distributed as a CDN asset rather than a Git repository:
 | Asset | URL | SHA-256 |
 |---|---|---|
 | Mambo WebP sprite sheet | `https://cdn.codex-pet.com/pets/mambo/spritesheet.webp` | `bf40a1330a1151457516cc51ca76cb10097920cae07becc21d5882c8d84a1977` |
+| JetBrains Mono 2.304 release archive | `https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip` | `6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf` |
 
 The Distributed Radar page consumes live data rather than a vendored source or
 asset. Its default endpoint is

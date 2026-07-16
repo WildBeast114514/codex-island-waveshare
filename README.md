@@ -131,7 +131,12 @@ and the page scrolls vertically when they do not fit. `UPDATED` is the
 Mac-local time of the last successful fetch because the public table does not
 currently expose its own update timestamp. Failed requests retain the last
 valid atomic cache and mark it stale after 30 minutes. Override the endpoint
-with `CODEX_DISTRIBUTED_RADAR_URL`.
+with `CODEX_DISTRIBUTED_RADAR_URL`. The page uses enlarged JetBrains Mono
+subsets for a code-editor visual style while keeping the rest of the interface
+in its original UI typeface. Regenerate those committed LVGL font sources with
+`scripts/build_ui_fonts.sh`. The generated glyph bitmaps are deliberately
+uncompressed so LVGL rendering never shares compressed-font decoder state
+between the three sizes used in one frame.
 
 ## Codex pet page
 

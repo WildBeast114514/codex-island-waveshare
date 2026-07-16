@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "ui/fonts/programmer_fonts.hpp"
 #include "ui/ui_theme.hpp"
 
 namespace codex_island::ui {
@@ -9,8 +10,8 @@ namespace {
 
 constexpr std::array<uint32_t, 5> kGroupColors = {
     kOrange, kBlue, 0xC7D2E0, kCyan, kMagenta};
-constexpr int kAggregateHeight = 46;
-constexpr int kEffortHeight = 38;
+constexpr int kAggregateHeight = 50;
+constexpr int kEffortHeight = 43;
 
 lv_obj_t *make_scope(lv_obj_t *parent) {
     lv_obj_t *outer = lv_obj_create(parent);
@@ -56,13 +57,13 @@ void DistributedRadarPage::create(lv_obj_t *parent) {
     style_black_surface(parent);
     make_scope(parent);
     lv_obj_t *title =
-        make_label(parent, "DISTRIBUTED IQ", &lv_font_montserrat_22, kWhite);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 52);
-    updated_ = make_label(parent, "UPDATED --", &lv_font_montserrat_12, kMuted);
+        make_label(parent, "DISTRIBUTED IQ", &jetbrains_mono_24, kWhite);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 50);
+    updated_ = make_label(parent, "UPDATED --", &jetbrains_mono_14, kMuted);
     lv_obj_align(updated_, LV_ALIGN_TOP_MID, 0, 84);
 
     waiting_ = make_label(parent, "Waiting for live IQ",
-                          &lv_font_montserrat_18, kMuted);
+                          &jetbrains_mono_20, kMuted);
     lv_obj_align(waiting_, LV_ALIGN_CENTER, 0, -3);
 
     list_ = lv_obj_create(parent);
@@ -98,21 +99,21 @@ void DistributedRadarPage::create(lv_obj_t *parent) {
         lv_obj_clear_flag(accents_[row], LV_OBJ_FLAG_SCROLLABLE);
 
         names_[row] =
-            make_label(row_panels_[row], "", &lv_font_montserrat_18, kWhite);
-        lv_obj_set_pos(names_[row], 34, 8);
-        lv_obj_set_width(names_[row], 130);
+            make_label(row_panels_[row], "", &jetbrains_mono_20, kWhite);
+        lv_obj_set_pos(names_[row], 34, 10);
+        lv_obj_set_width(names_[row], 132);
         lv_label_set_long_mode(names_[row], LV_LABEL_LONG_DOT);
 
         samples_[row] =
-            make_label(row_panels_[row], "", &lv_font_montserrat_12, kMuted);
-        lv_obj_set_pos(samples_[row], 168, 12);
-        lv_obj_set_width(samples_[row], 92);
+            make_label(row_panels_[row], "", &jetbrains_mono_14, kMuted);
+        lv_obj_set_pos(samples_[row], 164, 14);
+        lv_obj_set_width(samples_[row], 104);
         lv_obj_set_style_text_align(samples_[row], LV_TEXT_ALIGN_RIGHT, 0);
 
         scores_[row] =
-            make_label(row_panels_[row], "", &lv_font_montserrat_18, kCyan);
-        lv_obj_set_pos(scores_[row], 276, 8);
-        lv_obj_set_width(scores_[row], 64);
+            make_label(row_panels_[row], "", &jetbrains_mono_20, kCyan);
+        lv_obj_set_pos(scores_[row], 276, 10);
+        lv_obj_set_width(scores_[row], 66);
         lv_obj_set_style_text_align(scores_[row], LV_TEXT_ALIGN_RIGHT, 0);
 
         lv_obj_add_flag(row_panels_[row], LV_OBJ_FLAG_HIDDEN);
@@ -168,23 +169,23 @@ void DistributedRadarPage::render_rows() {
         lv_obj_set_style_bg_color(accents_[row], lv_color_hex(color), 0);
         lv_obj_set_style_bg_opa(accents_[row], LV_OPA_COVER, 0);
         if (value.aggregate) {
-            lv_obj_set_size(accents_[row], 4, 28);
-            lv_obj_set_pos(accents_[row], 11, 9);
+            lv_obj_set_size(accents_[row], 4, 30);
+            lv_obj_set_pos(accents_[row], 11, 10);
             lv_obj_set_style_radius(accents_[row], 2, 0);
-            lv_obj_set_pos(names_[row], 24, 11);
+            lv_obj_set_pos(names_[row], 24, 12);
             lv_obj_set_style_text_color(names_[row], lv_color_hex(color), 0);
             lv_label_set_text(names_[row], value.model);
-            lv_obj_set_pos(samples_[row], 168, 15);
-            lv_obj_set_pos(scores_[row], 276, 11);
+            lv_obj_set_pos(samples_[row], 164, 17);
+            lv_obj_set_pos(scores_[row], 276, 12);
         } else {
             lv_obj_set_size(accents_[row], 6, 6);
-            lv_obj_set_pos(accents_[row], 22, 16);
+            lv_obj_set_pos(accents_[row], 22, 18);
             lv_obj_set_style_radius(accents_[row], LV_RADIUS_CIRCLE, 0);
-            lv_obj_set_pos(names_[row], 42, 8);
+            lv_obj_set_pos(names_[row], 42, 10);
             lv_obj_set_style_text_color(names_[row], lv_color_hex(kWhite), 0);
             lv_label_set_text(names_[row], value.effort);
-            lv_obj_set_pos(samples_[row], 168, 12);
-            lv_obj_set_pos(scores_[row], 276, 8);
+            lv_obj_set_pos(samples_[row], 164, 14);
+            lv_obj_set_pos(scores_[row], 276, 10);
         }
         lv_obj_set_style_text_color(scores_[row], lv_color_hex(color), 0);
         if (value.has_data) {

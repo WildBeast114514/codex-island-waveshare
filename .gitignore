@@ -15,6 +15,7 @@ firmware/sdkconfig
 firmware/sdkconfig.old
 
 assets/pets/.cache/
+assets/fonts/.cache/
 backups/*.bin
 backups/*.sha256
 logs/*.log

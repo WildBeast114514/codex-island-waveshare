@@ -53,6 +53,15 @@ excluded from Git; exact commits are recorded in `reference/LOCKFILE.md`.
   calculates aggregate and effort IQ values. No page code, artwork, or response
   data is bundled in this repository.
 
+## JetBrains Mono
+
+- Source: <https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304>
+- License: SIL Open Font License 1.1; the complete notice is included at
+  `assets/fonts/JetBrainsMono-OFL.txt`.
+- Use: Medium and SemiBold ASCII subsets are converted at build-development
+  time into LVGL bitmap fonts for the Distributed Radar page. The original TTF
+  files and release archive remain in an ignored cache.
+
 Codex and OpenAI names are used only to identify the compatible local service.
 This project is independent and is not affiliated with or endorsed by OpenAI,
 Waveshare, or CodexRadar.
