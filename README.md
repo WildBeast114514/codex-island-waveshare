@@ -132,6 +132,10 @@ rm -rf ~/Library/Application\ Support/CodexIsland/bridge-runtime
 - Scroll up/down inside Radar to browse every IQ model received (up to 24);
   horizontal swipes still switch pages. The header shows the source data's
   Mac-local update time.
+- The QMI8658 accelerometer keeps the complete 466×466 LVGL interface upright
+  in four orientations. Rotation requires a stable, mostly vertical pose for
+  about 0.8 seconds; face-up/down and diagonal poses retain the current
+  orientation to prevent jitter. Touch coordinates rotate with the display.
 - BOOT short press advances a page; double press requests immediate refresh.
 - PWR short press toggles display brightness; PMIC long-press behavior is left intact.
 - USB: 35% brightness, page rotation every 15 seconds after 60 seconds without interaction, and a 1–2 pixel shift every five minutes.

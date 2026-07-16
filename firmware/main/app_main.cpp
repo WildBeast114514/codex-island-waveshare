@@ -16,6 +16,7 @@
 
 #include "model/app_state.hpp"
 #include "input/input_manager.hpp"
+#include "input/orientation_manager.hpp"
 #include "power/power_manager.hpp"
 #include "protocol/protocol.hpp"
 #include "storage/state_cache.hpp"
@@ -32,6 +33,7 @@ codex_island::protocol::ProtocolProcessor g_protocol;
 codex_island::transport::ble_nus::Line g_protocol_line{};
 codex_island::power::PowerManager g_power;
 codex_island::input::InputManager g_input;
+codex_island::input::OrientationManager g_orientation;
 codex_island::storage::StateCache g_cache;
 std::atomic<bool> g_ui_dirty{false};
 std::atomic<bool> g_next_page{false};
@@ -46,6 +48,19 @@ std::atomic<uint8_t> g_configured_brightness{35};
 std::atomic<uint8_t> g_actual_brightness{35};
 std::atomic<int16_t> g_brightness_request{-1};
 std::atomic<int64_t> g_last_ble_activity{0};
+std::atomic<int8_t> g_rotation_request{-1};
+lv_display_t *g_display = nullptr;
+
+lv_display_rotation_t touch_rotation(
+    codex_island::input::DisplayOrientation orientation) {
+    return static_cast<lv_display_rotation_t>(
+        codex_island::input::inverse_orientation(orientation));
+}
+
+bsp_display_rotation_t bsp_rotation(
+    codex_island::input::DisplayOrientation orientation) {
+    return static_cast<bsp_display_rotation_t>(orientation);
+}
 
 void ui_tick_task(void *) {
     int64_t last_tick = -1;
@@ -56,6 +71,7 @@ void ui_tick_task(void *) {
         const bool refresh_requested = g_ui_dirty.exchange(false);
         const bool next_page = g_next_page.exchange(false);
         const bool apply_shift = g_apply_shift.exchange(false);
+        const int8_t requested_rotation = g_rotation_request.exchange(-1);
         if (g_ui.take_user_activity()) {
             g_last_activity.store(now);
             g_wake_screen.store(true);
@@ -67,10 +83,33 @@ void ui_tick_task(void *) {
             g_wake_screen.store(true);
         }
         if (!one_second_elapsed && !refresh_requested && !next_page &&
-            !apply_shift) {
+            !apply_shift && requested_rotation < 0) {
             continue;
         }
         ESP_ERROR_CHECK(bsp_display_lock(static_cast<uint32_t>(-1)));
+        if (requested_rotation >= 0) {
+            lv_indev_t *touch = bsp_display_get_input_dev();
+            if (touch != nullptr &&
+                lv_indev_get_state(touch) == LV_INDEV_STATE_PRESSED) {
+                g_rotation_request.store(requested_rotation);
+            } else {
+                const auto orientation =
+                    static_cast<codex_island::input::DisplayOrientation>(
+                        requested_rotation);
+                const esp_err_t result =
+                    bsp_display_rotation_set(bsp_rotation(orientation));
+                if (result == ESP_OK) {
+                    lv_display_set_rotation(
+                        g_display, touch_rotation(orientation));
+                    lv_obj_invalidate(lv_screen_active());
+                    ESP_LOGI(kTag, "display auto-rotated to %s degrees",
+                             codex_island::input::orientation_name(orientation));
+                } else {
+                    ESP_LOGE(kTag, "display rotation failed: %s",
+                             esp_err_to_name(result));
+                }
+            }
+        }
         if (next_page) {
             g_ui.next_page();
         }
@@ -84,6 +123,24 @@ void ui_tick_task(void *) {
             g_ui.refresh(now);
         }
         bsp_display_unlock();
+    }
+}
+
+void orientation_task(void *) {
+    const esp_err_t result = g_orientation.begin();
+    if (result != ESP_OK) {
+        ESP_LOGE(kTag, "QMI8658 unavailable; auto-rotation disabled: %s",
+                 esp_err_to_name(result));
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    while (true) {
+        codex_island::input::DisplayOrientation orientation{};
+        if (g_orientation.poll(orientation)) {
+            g_rotation_request.store(static_cast<int8_t>(orientation));
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -301,8 +358,8 @@ extern "C" void app_main(void) {
     g_actual_brightness.store(initial_brightness);
     ESP_LOGI(kTag, "NVS cache %s", cache_loaded ? "loaded" : "empty");
 
-    lv_display_t *display = bsp_display_start();
-    ESP_ERROR_CHECK(display == nullptr ? ESP_FAIL : ESP_OK);
+    g_display = bsp_display_start();
+    ESP_ERROR_CHECK(g_display == nullptr ? ESP_FAIL : ESP_OK);
     ESP_ERROR_CHECK(bsp_display_brightness_set(initial_brightness));
 
     const esp_err_t power_result = g_power.begin();
@@ -321,8 +378,8 @@ extern "C" void app_main(void) {
 
     ESP_ERROR_CHECK(bsp_display_lock(static_cast<uint32_t>(-1)));
     g_ui.begin(&g_state, initial_page, initial_brightness);
-    const int width = lv_display_get_horizontal_resolution(display);
-    const int height = lv_display_get_vertical_resolution(display);
+    const int width = lv_display_get_horizontal_resolution(g_display);
+    const int height = lv_display_get_vertical_resolution(g_display);
     bsp_display_unlock();
 
     ESP_LOGI(kTag, "native LVGL display: %dx%d", width, height);
@@ -353,5 +410,8 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(task_result == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     task_result =
         xTaskCreate(power_input_task, "power_input", 12288, nullptr, 4, nullptr);
+    ESP_ERROR_CHECK(task_result == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
+    task_result =
+        xTaskCreate(orientation_task, "orientation", 4096, nullptr, 3, nullptr);
     ESP_ERROR_CHECK(task_result == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 }
