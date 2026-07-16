@@ -6,12 +6,15 @@
 
 #include "lvgl.h"
 #include "model/app_state.hpp"
+#include "ui/page_distributed_radar.hpp"
 #include "ui/page_pet.hpp"
 #include "ui/page_radar.hpp"
 #include "ui/page_status.hpp"
 #include "ui/page_usage.hpp"
 
 namespace codex_island::ui {
+
+constexpr std::size_t kPageCount = 5;
 
 class UiApp {
 public:
@@ -41,13 +44,14 @@ private:
 
     AppStateStore *store_ = nullptr;
     lv_obj_t *tileview_ = nullptr;
-    std::array<lv_obj_t *, 4> tiles_{};
-    std::array<DotContext, 16> dot_contexts_{};
+    std::array<lv_obj_t *, kPageCount> tiles_{};
+    std::array<DotContext, kPageCount * kPageCount> dot_contexts_{};
     std::size_t next_dot_context_ = 0;
     std::atomic<uint8_t> current_page_{0};
     std::atomic<bool> user_activity_{false};
     UsagePage usage_{};
     RadarPage radar_{};
+    DistributedRadarPage distributed_radar_{};
     StatusPage status_{};
     PetPage pet_{};
 };

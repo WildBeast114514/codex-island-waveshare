@@ -28,6 +28,7 @@ class Settings:
     radar_api_token: str | None = None
     radar_allow_html: bool = False
     radar_primary_key: str | None = None
+    distributed_radar_url: str = "https://api.codexradar.com/api/v1/table"
     ble_address: str | None = None
 
     @classmethod
@@ -61,5 +62,9 @@ class Settings:
             radar_api_token=os.environ.get("CODEX_RADAR_API_TOKEN") or None,
             radar_allow_html=_flag("CODEX_RADAR_ALLOW_HTML"),
             radar_primary_key=os.environ.get("CODEX_RADAR_PRIMARY_KEY") or None,
+            distributed_radar_url=os.environ.get(
+                "CODEX_DISTRIBUTED_RADAR_URL",
+                "https://api.codexradar.com/api/v1/table",
+            ),
             ble_address=os.environ.get("CODEX_ISLAND_BLE_ADDRESS") or None,
         )

@@ -45,6 +45,14 @@ excluded from Git; exact commits are recorded in `reference/LOCKFILE.md`.
   pet package when integrated. Replace the manifest for redistribution contexts
   that require an explicitly licensed artwork asset.
 
+## Distributed Radar live data
+
+- Page: <https://deng.codexradar.com/>
+- Public table endpoint: <https://api.codexradar.com/api/v1/table>
+- Use: the macOS Bridge reads the live model/task result grid and independently
+  calculates aggregate and effort IQ values. No page code, artwork, or response
+  data is bundled in this repository.
+
 Codex and OpenAI names are used only to identify the compatible local service.
 This project is independent and is not affiliated with or endorsed by OpenAI,
 Waveshare, or CodexRadar.

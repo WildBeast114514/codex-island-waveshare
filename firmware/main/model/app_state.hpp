@@ -10,6 +10,7 @@
 namespace codex_island {
 
 constexpr std::size_t kMaxRadarModels = 24;
+constexpr std::size_t kMaxDistributedRows = 32;
 constexpr std::size_t kDailyPoints = 7;
 constexpr std::size_t kTrendPoints = 12;
 
@@ -45,6 +46,25 @@ struct RadarState {
     uint8_t trend_count = 0;
 };
 
+struct DistributedRadarRow {
+    char model[32]{};
+    char effort[24]{};
+    uint8_t iq = 0;
+    uint16_t passed = 0;
+    uint16_t total = 0;
+    bool has_data = false;
+    bool aggregate = false;
+};
+
+struct DistributedRadarState {
+    bool valid = false;
+    bool stale = true;
+    int64_t updated_at = 0;
+    char updated_label[20]{};
+    uint8_t count = 0;
+    std::array<DistributedRadarRow, kMaxDistributedRows> rows{};
+};
+
 struct LinkState {
     bool ble_connected = false;
     int64_t last_packet_at = 0;
@@ -75,6 +95,7 @@ struct PetState {
 struct AppState {
     UsageState usage;
     RadarState radar;
+    DistributedRadarState distributed_radar;
     LinkState link;
     PowerState power;
     PetState pet;

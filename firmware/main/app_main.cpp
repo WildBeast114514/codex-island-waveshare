@@ -184,7 +184,7 @@ void protocol_task(void *) {
                 set_link_connected(false);
             } else if (event == LinkEvent::kSubscribed) {
                 const bool sent = codex_island::transport::ble_nus::notify_json_line(
-                    "{\"v\":1,\"k\":\"hello\",\"fw\":\"0.2.0\"}");
+                "{\"v\":1,\"k\":\"hello\",\"fw\":\"0.3.0\"}");
                 ESP_LOGI(kTag, "hello notification %s", sent ? "sent" : "failed");
             }
         }
@@ -348,7 +348,7 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(nvs_result);
 
     ESP_ERROR_CHECK(g_cache.begin());
-    codex_island::AppState initial_state{};
+    static codex_island::AppState initial_state{};
     uint8_t initial_page = 0;
     uint8_t initial_brightness = 35;
     const bool cache_loaded =
@@ -403,7 +403,7 @@ extern "C" void app_main(void) {
              static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_DMA)));
 
     BaseType_t task_result =
-        xTaskCreate(ui_tick_task, "ui_tick", 4096, nullptr, 5, nullptr);
+        xTaskCreate(ui_tick_task, "ui_tick", 12288, nullptr, 5, nullptr);
     ESP_ERROR_CHECK(task_result == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     task_result =
         xTaskCreate(protocol_task, "protocol", 12288, nullptr, 6, nullptr);

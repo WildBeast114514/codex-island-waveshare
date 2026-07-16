@@ -6,6 +6,8 @@ import re
 import pytest
 
 from codex_island_bridge.models import (
+    DistributedRadarRow,
+    DistributedRadarSnapshot,
     PetSnapshot,
     RadarModel,
     RadarSnapshot,
@@ -15,6 +17,7 @@ from codex_island_bridge.protocol import (
     MAX_LINE_BYTES,
     ProtocolError,
     Sequence,
+    distributed_radar_line,
     heartbeat_line,
     pet_line,
     radar_line,
@@ -75,6 +78,27 @@ def test_radar_names_are_dynamic_and_ties_keep_source_order() -> None:
         ["FutureName", "a"],
         ["FutureName", "b"],
     ]
+
+
+def test_distributed_radar_keeps_dynamic_group_order_and_counts() -> None:
+    snapshot = DistributedRadarSnapshot(
+        updated_at=1_000,
+        rows=(
+            DistributedRadarRow(
+                "future/@all", "FutureName", "", 101, 67, 100, True, 0
+            ),
+            DistributedRadarRow(
+                "future/@xhigh", "FutureName", "xhigh", 120, 8, 10, False, 1
+            ),
+        ),
+    )
+    message = decoded(distributed_radar_line(snapshot, 3))
+    assert message["k"] == "dradar"
+    assert message["rows"] == [
+        ["FutureName", "", 101, 67, 100, 1],
+        ["FutureName", "xhigh", 120, 8, 10, 0],
+    ]
+    assert re.fullmatch(r"\d{2}-\d{2} \d{2}:\d{2}", message["updated"])
 
 
 def test_sequence_wraps_without_emitting_zero() -> None:

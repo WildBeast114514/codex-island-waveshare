@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-island-bridge"
-version = "0.2.0"
+version = "0.3.0"
 description = "macOS data and BLE bridge for Codex Island"
 readme = "README.md"
 requires-python = ">=3.11"

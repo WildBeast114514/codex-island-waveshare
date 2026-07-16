@@ -242,6 +242,84 @@ bool parse_radar(cJSON *root, int64_t timestamp, RadarState &radar) {
     return true;
 }
 
+bool parse_distributed_radar(cJSON *root, int64_t timestamp,
+                             DistributedRadarState &radar) {
+    const cJSON *stale = cJSON_GetObjectItemCaseSensitive(root, "stale");
+    const cJSON *updated = cJSON_GetObjectItemCaseSensitive(root, "updated");
+    const cJSON *rows = cJSON_GetObjectItemCaseSensitive(root, "rows");
+    if (!cJSON_IsBool(stale) || !cJSON_IsString(updated) ||
+        updated->valuestring == nullptr || !cJSON_IsArray(rows)) {
+        return false;
+    }
+    const int row_count = cJSON_GetArraySize(rows);
+    if (row_count < 1 ||
+        row_count > static_cast<int>(kMaxDistributedRows)) {
+        return false;
+    }
+
+    DistributedRadarState parsed{};
+    parsed.valid = true;
+    parsed.stale = cJSON_IsTrue(stale);
+    parsed.updated_at = timestamp;
+    if (!copy_utf8(parsed.updated_label, updated->valuestring)) {
+        return false;
+    }
+    parsed.count = static_cast<uint8_t>(row_count);
+    for (int index = 0; index < row_count; ++index) {
+        const cJSON *tuple = cJSON_GetArrayItem(rows, index);
+        if (!cJSON_IsArray(tuple) || cJSON_GetArraySize(tuple) != 6) {
+            return false;
+        }
+        const cJSON *model = cJSON_GetArrayItem(tuple, 0);
+        const cJSON *effort = cJSON_GetArrayItem(tuple, 1);
+        const cJSON *iq_item = cJSON_GetArrayItem(tuple, 2);
+        int64_t passed = 0;
+        int64_t total = 0;
+        int64_t aggregate = 0;
+        DistributedRadarRow &row =
+            parsed.rows[static_cast<std::size_t>(index)];
+        if (!cJSON_IsString(model) || !cJSON_IsString(effort) ||
+            !copy_utf8(row.model, model->valuestring) ||
+            !read_array_integer(cJSON_GetArrayItem(tuple, 3), 0, 65'535,
+                                passed) ||
+            !read_array_integer(cJSON_GetArrayItem(tuple, 4), 0, 65'535,
+                                total) ||
+            !read_array_integer(cJSON_GetArrayItem(tuple, 5), 0, 1,
+                                aggregate) ||
+            passed > total) {
+            return false;
+        }
+        if (effort->valuestring == nullptr) {
+            return false;
+        }
+        if (effort->valuestring[0] != '\0' &&
+            !copy_utf8(row.effort, effort->valuestring)) {
+            return false;
+        }
+        if (cJSON_IsNull(iq_item)) {
+            if (passed != 0 || total != 0) {
+                return false;
+            }
+            row.has_data = false;
+        } else {
+            int64_t iq = 0;
+            if (!read_array_integer(iq_item, 0, 150, iq) || total == 0) {
+                return false;
+            }
+            row.iq = static_cast<uint8_t>(iq);
+            row.has_data = true;
+        }
+        row.passed = static_cast<uint16_t>(passed);
+        row.total = static_cast<uint16_t>(total);
+        row.aggregate = aggregate != 0;
+        if (row.aggregate != (row.effort[0] == '\0')) {
+            return false;
+        }
+    }
+    radar = parsed;
+    return true;
+}
+
 bool parse_pet(cJSON *root, int64_t timestamp, PetState &pet) {
     const cJSON *state = cJSON_GetObjectItemCaseSensitive(root, "state");
     int64_t active_tasks = 0;
@@ -277,6 +355,7 @@ bool parse_pet(cJSON *root, int64_t timestamp, PetState &pet) {
 void ProtocolProcessor::begin_session() {
     last_usage_sequence_ = 0;
     last_radar_sequence_ = 0;
+    last_distributed_radar_sequence_ = 0;
     last_pet_sequence_ = 0;
 }
 
@@ -335,6 +414,24 @@ ProcessResult ProtocolProcessor::process_line(const char *line,
         last_radar_sequence_ = sequence;
         return ProcessResult::kAppliedRadar;
     }
+    if (std::strcmp(kind, "dradar") == 0) {
+        if (sequence <= last_distributed_radar_sequence_) {
+            store.update([monotonic_seconds](AppState &state) {
+                state.link.last_packet_at = monotonic_seconds;
+            });
+            return ProcessResult::kDuplicate;
+        }
+        DistributedRadarState radar{};
+        if (!parse_distributed_radar(root, timestamp, radar)) {
+            return ProcessResult::kInvalid;
+        }
+        store.update([&radar, monotonic_seconds](AppState &state) {
+            state.distributed_radar = radar;
+            state.link.last_packet_at = monotonic_seconds;
+        });
+        last_distributed_radar_sequence_ = sequence;
+        return ProcessResult::kAppliedDistributedRadar;
+    }
     if (std::strcmp(kind, "pet") == 0) {
         if (sequence <= last_pet_sequence_) {
             store.update([monotonic_seconds](AppState &state) {
@@ -362,6 +459,8 @@ const char *result_name(ProcessResult result) {
             return "usage applied";
         case ProcessResult::kAppliedRadar:
             return "radar applied";
+        case ProcessResult::kAppliedDistributedRadar:
+            return "distributed radar applied";
         case ProcessResult::kAppliedPet:
             return "pet applied";
         case ProcessResult::kHeartbeat:

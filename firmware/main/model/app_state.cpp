@@ -34,6 +34,18 @@ void set_model(RadarModel &model, const char *family, const char *effort,
     model.total = static_cast<uint8_t>(total);
 }
 
+void set_distributed_row(DistributedRadarRow &row, const char *model,
+                         const char *effort, int iq, int passed, int total,
+                         bool aggregate) {
+    std::snprintf(row.model, sizeof(row.model), "%s", model);
+    std::snprintf(row.effort, sizeof(row.effort), "%s", effort);
+    row.iq = static_cast<uint8_t>(iq);
+    row.passed = static_cast<uint16_t>(passed);
+    row.total = static_cast<uint16_t>(total);
+    row.has_data = total > 0;
+    row.aggregate = aggregate;
+}
+
 }  // namespace
 
 AppState make_static_mock_state() {
@@ -61,6 +73,30 @@ AppState make_static_mock_state() {
     set_model(state.radar.models[4], "Terra", "high", 450, 4, 10);
     state.radar.trend_iq_x10 = {720, 760, 880, 840, 920, 850, 810, 900, 880, 980, 1050, 1200};
     state.radar.trend_count = 12;
+
+    state.distributed_radar.valid = true;
+    state.distributed_radar.stale = false;
+    state.distributed_radar.updated_at = 1'700'000'000;
+    std::snprintf(state.distributed_radar.updated_label,
+                  sizeof(state.distributed_radar.updated_label),
+                  "11-15 06:13");
+    state.distributed_radar.count = 8;
+    set_distributed_row(state.distributed_radar.rows[0], "Sol", "", 89, 415,
+                        700, true);
+    set_distributed_row(state.distributed_radar.rows[1], "Sol", "low", 78, 48,
+                        92, false);
+    set_distributed_row(state.distributed_radar.rows[2], "Sol", "max", 101, 88,
+                        131, false);
+    set_distributed_row(state.distributed_radar.rows[3], "Terra", "", 76, 189,
+                        373, true);
+    set_distributed_row(state.distributed_radar.rows[4], "Terra", "low", 43, 20,
+                        69, false);
+    set_distributed_row(state.distributed_radar.rows[5], "Terra", "ultra", 114,
+                        50, 66, false);
+    set_distributed_row(state.distributed_radar.rows[6], "Luna", "", 52, 130,
+                        372, true);
+    set_distributed_row(state.distributed_radar.rows[7], "Luna", "max", 97, 51,
+                        79, false);
 
     state.link.ble_connected = true;
     state.power.battery_percent = 86;

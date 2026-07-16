@@ -2,10 +2,10 @@
 
 Native 466x466 LVGL 9 status display for the Waveshare ESP32-S3-Touch-AMOLED-1.75C, backed by a local macOS Codex bridge. It supports both the USB-only and battery-equipped board variants.
 
-The four touch pages show Codex usage, dynamic CodexRadar model IQ,
-link/power/trend status, and an animated Codex pet. Credentials and network
-requests stay on the Mac; the ESP32 receives only compact derived snapshots
-over BLE Nordic UART Service.
+The five touch pages show Codex usage, dynamic CodexRadar model IQ,
+live Distributed Radar IQ by model and effort, link/power/trend status, and an
+animated Codex pet. Credentials and network requests stay on the Mac; the
+ESP32 receives only compact derived snapshots over BLE Nordic UART Service.
 
 ## Hardware baseline status
 
@@ -63,9 +63,9 @@ scripts/flash_firmware.sh
 Set `MONITOR=1` when running the flash script from an interactive terminal to
 continue into the serial monitor.
 
-The firmware starts with the last valid Usage/Radar/pet snapshot from NVS, then
-advertises as `Codex Island-XXXX`. It never stores Codex credentials. The
-tested unit advertises as `Codex Island-570E`.
+The firmware starts with the last valid Usage/Codex Radar/Distributed
+Radar/pet snapshot from NVS, then advertises as `Codex Island-XXXX`. It never
+stores Codex credentials. The tested unit advertises as `Codex Island-570E`.
 
 ## macOS Bridge
 
@@ -78,20 +78,23 @@ scripts/bootstrap_macos.sh
 .venv/bin/codex-island-bridge pet-status
 .venv/bin/codex-island-bridge devices
 CODEX_RADAR_ALLOW_HTML=1 .venv/bin/codex-island-bridge radar-test
+.venv/bin/codex-island-bridge distributed-test
 .venv/bin/codex-island-bridge once
-.venv/bin/pytest -q bridge/tests
+PYTHONPATH=. .venv/bin/pytest -q bridge/tests
 ```
 
-The background Bridge collects and pushes Codex usage every 300 seconds and
-Radar every 3600 seconds. It checks local Codex lifecycle events every two
-seconds and pushes pet data only when the aggregate state or active-task count
-changes. It also sends a data-neutral BLE heartbeat every 60 seconds;
-heartbeats do not change the Status page's `Last sync` time. If an
-apparently connected central sends no application traffic for 180 seconds, the
-firmware terminates the stale link and resumes advertising. This recovers the
-half-open CoreBluetooth state that can otherwise remain after a Mac sleeps.
-The intervals can be overridden with `CODEX_USAGE_INTERVAL`,
-`CODEX_RADAR_INTERVAL`, `CODEX_PET_INTERVAL`, and
+The background Bridge collects and pushes Codex usage and Distributed Radar
+every 300 seconds, and Codex Radar every 3600 seconds. The Distributed Radar
+refresh intentionally shares the usage interval, so a BOOT double press
+refreshes the limits and live distributed IQ together. The Bridge checks local
+Codex lifecycle events every two seconds and pushes pet data only when the
+aggregate state or active-task count changes. It also sends a data-neutral BLE
+heartbeat every 60 seconds; heartbeats do not change the Status page's `Last
+sync` time. If an apparently connected central sends no application traffic
+for 180 seconds, the firmware terminates the stale link and resumes
+advertising. This recovers the half-open CoreBluetooth state that can otherwise
+remain after a Mac sleeps. The intervals can be overridden with
+`CODEX_USAGE_INTERVAL`, `CODEX_RADAR_INTERVAL`, `CODEX_PET_INTERVAL`, and
 `CODEX_HEARTBEAT_INTERVAL`. CoreBluetooth scan, connect, subscription, write,
 and disconnect operations also have hard
 deadlines (`CODEX_BLE_IO_TIMEOUT`, 10 seconds by default). A timed-out GATT
@@ -112,9 +115,27 @@ as Sol/Terra/Luna may change without a firmware update. Trend selection can be
 overridden with `CODEX_RADAR_PRIMARY_KEY`; a missing/renamed key falls back to
 the highest IQ in each historical sample.
 
+## Distributed Radar page
+
+The third page reads only the live-IQ table used by
+[`deng.codexradar.com`](https://deng.codexradar.com/). It deliberately omits
+the page's first pooled GPT-family average and shows each reported model
+aggregate followed by all of its effort tiers. IQ is calculated with the
+source page's `round(passed / total * 150)` rule.
+
+Model and effort names are parsed from the live table rather than compiled into
+an enum. Current labels such as Sol, Terra, and Luna can therefore be renamed,
+removed, or extended without a firmware update. The compact protocol and
+firmware cache accept up to 32 aggregate/effort rows; rows retain source order
+and the page scrolls vertically when they do not fit. `UPDATED` is the
+Mac-local time of the last successful fetch because the public table does not
+currently expose its own update timestamp. Failed requests retain the last
+valid atomic cache and mark it stale after 30 minutes. Override the endpoint
+with `CODEX_DISTRIBUTED_RADAR_URL`.
+
 ## Codex pet page
 
-The fourth page renders a build-time converted sprite sheet directly through
+The fifth page renders a build-time converted sprite sheet directly through
 native 466×466 LVGL. Mambo is the default asset. The Bridge maps local Codex
 lifecycle events to generic pet states:
 
@@ -160,10 +181,12 @@ rm -rf ~/Library/Application\ Support/CodexIsland/bridge-runtime
 
 ## Controls and power policy
 
-- Swipe left/right or tap a page dot to switch Usage, Radar, Status and Pet.
-- Scroll up/down inside Radar to browse every IQ model received (up to 24);
-  horizontal swipes still switch pages. The header shows the source data's
-  Mac-local update time.
+- Swipe left/right or tap a page dot to switch Usage, Codex Radar, Distributed
+  Radar, Status, and Pet.
+- Scroll up/down inside either Radar list to browse every received row (up to
+  24 Codex Radar models and 32 Distributed Radar aggregate/effort rows);
+  horizontal swipes still switch pages. Each header shows its Mac-local update
+  time.
 - The QMI8658 accelerometer keeps the complete 466×466 LVGL interface upright
   in four orientations. Rotation requires a stable, mostly vertical pose for
   about 0.8 seconds; face-up/down and diagonal poses retain the current
@@ -178,8 +201,10 @@ rm -rf ~/Library/Application\ Support/CodexIsland/bridge-runtime
 Bridge JSON writes use temporary files, `fsync`, and atomic rename. Radar HTML
 is limited to one request per 30 minutes (normally hourly), uses conditional
 HTTP headers when available, and becomes stale after 18 hours. Failed network
-or parse attempts retain the last valid snapshot. ESP32 NVS writes only when
-Usage, Radar, pet, page, or brightness content changes.
+or parse attempts retain the last valid snapshot. Distributed Radar JSON is
+requested every five minutes with conditional HTTP headers when available and
+becomes stale after 30 minutes. ESP32 NVS writes only when Usage, either Radar,
+pet, page, or brightness content changes.
 
 Third-party sources and licenses are documented in `LICENSES.md` and locked in
 `reference/LOCKFILE.md`.

@@ -17,4 +17,10 @@ is distributed as a CDN asset rather than a Git repository:
 |---|---|---|
 | Mambo WebP sprite sheet | `https://cdn.codex-pet.com/pets/mambo/spritesheet.webp` | `bf40a1330a1151457516cc51ca76cb10097920cae07becc21d5882c8d84a1977` |
 
+The Distributed Radar page consumes live data rather than a vendored source or
+asset. Its default endpoint is
+`https://api.codexradar.com/api/v1/table` (schema `1` when integrated on
+2026-07-16); the Bridge validates the schema on every fetch and retains its last
+valid cache if the service changes incompatibly.
+
 The baseline firmware was copied from `examples/esp-idf/02_lvgl_demo_v9` at the locked Waveshare commit. A clean host build completed with ESP-IDF 5.5.4 on Apple Silicon before project-specific changes.

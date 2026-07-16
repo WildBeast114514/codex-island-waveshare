@@ -37,6 +37,27 @@ class RadarSnapshot:
     trend_iq_x10: tuple[int, ...] = field(default_factory=tuple)
 
 
+@dataclass(frozen=True, slots=True)
+class DistributedRadarRow:
+    """A live distributed-IQ row; model and effort names stay dynamic."""
+
+    key: str
+    model: str
+    effort: str
+    iq: int | None
+    passed: int
+    total: int
+    aggregate: bool = False
+    source_order: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class DistributedRadarSnapshot:
+    updated_at: int
+    rows: tuple[DistributedRadarRow, ...] = field(default_factory=tuple)
+    stale: bool = False
+
+
 PetActivity = Literal["idle", "running", "waiting", "review", "failed"]
 
 

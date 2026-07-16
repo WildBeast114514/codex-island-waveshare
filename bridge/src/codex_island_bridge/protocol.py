@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from .models import PetSnapshot, RadarSnapshot, UsageSnapshot
+from .models import (
+    DistributedRadarSnapshot,
+    PetSnapshot,
+    RadarSnapshot,
+    UsageSnapshot,
+)
 
 PROTOCOL_VERSION = 1
 MAX_LINE_BYTES = 2048
@@ -87,6 +92,37 @@ def radar_line(snapshot: RadarSnapshot, seq: int) -> bytes:
             "trend": list(snapshot.trend_iq_x10[-12:]),
         }
     )
+
+
+def distributed_radar_line(snapshot: DistributedRadarSnapshot, seq: int) -> bytes:
+    updated = datetime.fromtimestamp(snapshot.updated_at).astimezone().strftime("%m-%d %H:%M")
+    rows = [
+        [
+            row.model,
+            row.effort,
+            row.iq,
+            row.passed,
+            row.total,
+            1 if row.aggregate else 0,
+        ]
+        for row in snapshot.rows
+    ]
+    while rows:
+        try:
+            return _line(
+                {
+                    "v": PROTOCOL_VERSION,
+                    "k": "dradar",
+                    "seq": seq,
+                    "ts": snapshot.updated_at,
+                    "updated": updated,
+                    "stale": snapshot.stale,
+                    "rows": rows,
+                }
+            )
+        except ProtocolError:
+            rows.pop()
+    raise ProtocolError("distributed Radar has no row that fits the BLE protocol")
 
 
 def pet_line(snapshot: PetSnapshot, seq: int) -> bytes:

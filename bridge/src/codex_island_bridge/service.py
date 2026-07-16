@@ -14,8 +14,27 @@ from .codex_pet import CodexPetProvider
 from .codex_sessions import CodexSessionAggregator
 from .codex_usage import CodexUsageProvider, UsageProviderError
 from .config import Settings
-from .models import PetSnapshot, RadarModel, RadarSnapshot, UsageSnapshot
-from .protocol import Sequence, heartbeat_line, pet_line, radar_line, usage_line
+from .distributed_radar import (
+    DistributedRadarError,
+    DistributedRadarProvider,
+    DistributedRadarProviderProtocol,
+)
+from .models import (
+    DistributedRadarRow,
+    DistributedRadarSnapshot,
+    PetSnapshot,
+    RadarModel,
+    RadarSnapshot,
+    UsageSnapshot,
+)
+from .protocol import (
+    Sequence,
+    distributed_radar_line,
+    heartbeat_line,
+    pet_line,
+    radar_line,
+    usage_line,
+)
 from .radar import (
     AuthorizedApiRadarProvider,
     HtmlRadarProvider,
@@ -28,6 +47,7 @@ from .radar_history import RadarHistory
 LOGGER = logging.getLogger(__name__)
 RADAR_STALE_SECONDS = 18 * 60 * 60
 RADAR_MIN_REQUEST_SECONDS = 30 * 60
+DISTRIBUTED_RADAR_STALE_SECONDS = 30 * 60
 
 
 def _snapshot_from_cache(value: Any) -> UsageSnapshot | None:
@@ -216,11 +236,83 @@ class RadarService:
         return result
 
 
+def _distributed_from_dict(value: Any) -> DistributedRadarSnapshot | None:
+    if not isinstance(value, dict) or not isinstance(value.get("rows"), list):
+        return None
+    try:
+        rows = tuple(
+            DistributedRadarRow(
+                key=str(row["key"]),
+                model=str(row["model"]),
+                effort=str(row["effort"]),
+                iq=None if row.get("iq") is None else int(row["iq"]),
+                passed=int(row["passed"]),
+                total=int(row["total"]),
+                aggregate=bool(row.get("aggregate", False)),
+                source_order=int(row.get("source_order", order)),
+            )
+            for order, row in enumerate(value["rows"])
+        )
+        if not rows:
+            return None
+        return DistributedRadarSnapshot(
+            updated_at=int(value["updated_at"]),
+            rows=rows,
+            stale=bool(value.get("stale", False)),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+class DistributedRadarService:
+    def __init__(
+        self,
+        settings: Settings,
+        provider: DistributedRadarProviderProtocol | None = None,
+    ) -> None:
+        self.cache = AtomicJsonFile(
+            settings.data_dir / "distributed_radar_cache.json", schema_version=1
+        )
+        self.provider = provider or DistributedRadarProvider(settings.distributed_radar_url)
+
+    @staticmethod
+    def _with_stale(
+        snapshot: DistributedRadarSnapshot, now: int
+    ) -> DistributedRadarSnapshot:
+        return dataclasses.replace(
+            snapshot,
+            stale=now - snapshot.updated_at > DISTRIBUTED_RADAR_STALE_SECONDS,
+        )
+
+    def cached(self, *, now: int | None = None) -> DistributedRadarSnapshot | None:
+        current = int(time.time()) if now is None else now
+        snapshot = _distributed_from_dict(self.cache.load())
+        return self._with_stale(snapshot, current) if snapshot is not None else None
+
+    def collect(self, *, now: int | None = None) -> DistributedRadarSnapshot | None:
+        current = int(time.time()) if now is None else now
+        try:
+            snapshot = self.provider.fetch()
+        except DistributedRadarError:
+            cached = self.cached(now=current)
+            if cached is not None:
+                LOGGER.warning(
+                    "Distributed Radar refresh failed; retaining the last valid cache"
+                )
+                return cached
+            LOGGER.warning("Distributed Radar refresh failed; no cache is available")
+            return None
+        result = self._with_stale(snapshot, current)
+        self.cache.save(asdict(result))
+        return result
+
+
 class BridgeService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.usage = UsageService(settings)
         self.radar = RadarService(settings)
+        self.distributed_radar = DistributedRadarService(settings)
         self.pet = CodexPetProvider(settings.codex_sessions_dir)
         self.sequence = Sequence()
         self.refresh = asyncio.Event()
@@ -263,6 +355,14 @@ class BridgeService:
     async def send_radar(self, transport: BleTransport, snapshot: RadarSnapshot) -> None:
         await transport.send_line(radar_line(snapshot, self.sequence.next()))
 
+    async def collect_distributed_radar(self) -> DistributedRadarSnapshot | None:
+        return await asyncio.to_thread(self.distributed_radar.collect)
+
+    async def send_distributed_radar(
+        self, transport: BleTransport, snapshot: DistributedRadarSnapshot
+    ) -> None:
+        await transport.send_line(distributed_radar_line(snapshot, self.sequence.next()))
+
     async def collect_pet(self) -> PetSnapshot:
         return await asyncio.to_thread(self.pet.collect)
 
@@ -290,9 +390,17 @@ class BridgeService:
             if cached_radar is not None:
                 await self.send_radar(transport, cached_radar)
                 LOGGER.info("Pushed cached Radar")
+            cached_distributed = self.distributed_radar.cached()
+            if cached_distributed is not None:
+                await self.send_distributed_radar(transport, cached_distributed)
+                LOGGER.info("Pushed cached Distributed Radar")
             snapshot = await self.collect_usage()
             await self.send_usage(transport, snapshot)
             LOGGER.info("Pushed current usage")
+            distributed = await self.collect_distributed_radar()
+            if distributed is not None:
+                await self.send_distributed_radar(transport, distributed)
+                LOGGER.info("Pushed current Distributed Radar")
             radar = await self.collect_radar()
             if radar is not None:
                 await self.send_radar(transport, radar)
@@ -325,6 +433,10 @@ class BridgeService:
                 if cached_radar is not None:
                     await self.send_radar(transport, cached_radar)
                     LOGGER.info("Pushed cached Radar")
+                cached_distributed = self.distributed_radar.cached()
+                if cached_distributed is not None:
+                    await self.send_distributed_radar(transport, cached_distributed)
+                    LOGGER.info("Pushed cached Distributed Radar")
                 last_usage_refresh = 0.0
                 last_radar_refresh = 0.0
                 last_pet_refresh = 0.0
@@ -363,9 +475,14 @@ class BridgeService:
                     if usage_due <= 0 or now - last_usage_refresh >= self.settings.usage_interval_seconds:
                         snapshot = await self.collect_usage()
                         await self.send_usage(transport, snapshot)
-                        last_usage_refresh = now
                         last_link_activity = time.monotonic()
                         LOGGER.info("Pushed current usage")
+                        distributed = await self.collect_distributed_radar()
+                        if distributed is not None:
+                            await self.send_distributed_radar(transport, distributed)
+                            last_link_activity = time.monotonic()
+                            LOGGER.info("Pushed current Distributed Radar")
+                        last_usage_refresh = now
                     if radar_due <= 0 or now - last_radar_refresh >= self.settings.radar_interval_seconds:
                         radar = await self.collect_radar()
                         if radar is not None:

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <memory>
+#include <new>
 
 #include "nvs.h"
 
@@ -11,6 +13,7 @@ namespace {
 constexpr uint32_t kMagic = 0x43495831;  // CIX1
 constexpr uint16_t kVersion1 = 1;
 constexpr uint16_t kVersion2 = 2;
+constexpr uint16_t kVersion3 = 3;
 
 struct CacheBlobV1 {
     uint32_t magic = kMagic;
@@ -30,6 +33,20 @@ struct CacheBlobV2 {
     uint16_t reserved = 0;
     UsageState usage{};
     RadarState radar{};
+    PetState pet{};
+    uint8_t page = 0;
+    uint8_t brightness = 35;
+    uint16_t padding = 0;
+    uint32_t checksum = 0;
+};
+
+struct CacheBlobV3 {
+    uint32_t magic = kMagic;
+    uint16_t version = kVersion3;
+    uint16_t reserved = 0;
+    UsageState usage{};
+    RadarState radar{};
+    DistributedRadarState distributed_radar{};
     PetState pet{};
     uint8_t page = 0;
     uint8_t brightness = 35;
@@ -72,33 +89,67 @@ bool StateCache::load(AppState &state, uint8_t &page, uint8_t &brightness) {
         nvs_close(handle);
         return false;
     }
-    if (size == sizeof(CacheBlobV2)) {
-        CacheBlobV2 blob{};
-        const esp_err_t result = nvs_get_blob(handle, "state", &blob, &size);
-        nvs_close(handle);
-        if (result != ESP_OK || blob.magic != kMagic ||
-            blob.version != kVersion2 || blob.checksum != checksum(blob)) {
+    if (size == sizeof(CacheBlobV3)) {
+        auto blob = std::unique_ptr<CacheBlobV3>(
+            new (std::nothrow) CacheBlobV3{});
+        if (blob == nullptr) {
+            nvs_close(handle);
             return false;
         }
-        state.usage = blob.usage;
-        state.radar = blob.radar;
-        state.pet = blob.pet;
-        page = std::min<uint8_t>(blob.page, 3);
-        brightness = std::clamp<uint8_t>(blob.brightness, 5, 100);
-        last_checksum_ = blob.checksum;
+        const esp_err_t result = nvs_get_blob(handle, "state", blob.get(), &size);
+        nvs_close(handle);
+        if (result != ESP_OK || blob->magic != kMagic ||
+            blob->version != kVersion3 || blob->checksum != checksum(*blob)) {
+            return false;
+        }
+        state.usage = blob->usage;
+        state.radar = blob->radar;
+        state.distributed_radar = blob->distributed_radar;
+        state.pet = blob->pet;
+        page = std::min<uint8_t>(blob->page, 4);
+        brightness = std::clamp<uint8_t>(blob->brightness, 5, 100);
+        last_checksum_ = blob->checksum;
+    } else if (size == sizeof(CacheBlobV2)) {
+        auto blob = std::unique_ptr<CacheBlobV2>(
+            new (std::nothrow) CacheBlobV2{});
+        if (blob == nullptr) {
+            nvs_close(handle);
+            return false;
+        }
+        const esp_err_t result = nvs_get_blob(handle, "state", blob.get(), &size);
+        nvs_close(handle);
+        if (result != ESP_OK || blob->magic != kMagic ||
+            blob->version != kVersion2 || blob->checksum != checksum(*blob)) {
+            return false;
+        }
+        state.usage = blob->usage;
+        state.radar = blob->radar;
+        state.distributed_radar = {};
+        state.pet = blob->pet;
+        const uint8_t old_page = std::min<uint8_t>(blob->page, 3);
+        page = old_page >= 2 ? static_cast<uint8_t>(old_page + 1) : old_page;
+        brightness = std::clamp<uint8_t>(blob->brightness, 5, 100);
+        last_checksum_ = 0;
     } else if (size == sizeof(CacheBlobV1)) {
-        CacheBlobV1 blob{};
-        const esp_err_t result = nvs_get_blob(handle, "state", &blob, &size);
-        nvs_close(handle);
-        if (result != ESP_OK || blob.magic != kMagic ||
-            blob.version != kVersion1 || blob.checksum != checksum(blob)) {
+        auto blob = std::unique_ptr<CacheBlobV1>(
+            new (std::nothrow) CacheBlobV1{});
+        if (blob == nullptr) {
+            nvs_close(handle);
             return false;
         }
-        state.usage = blob.usage;
-        state.radar = blob.radar;
+        const esp_err_t result = nvs_get_blob(handle, "state", blob.get(), &size);
+        nvs_close(handle);
+        if (result != ESP_OK || blob->magic != kMagic ||
+            blob->version != kVersion1 || blob->checksum != checksum(*blob)) {
+            return false;
+        }
+        state.usage = blob->usage;
+        state.radar = blob->radar;
+        state.distributed_radar = {};
         state.pet = {};
-        page = std::min<uint8_t>(blob.page, 2);
-        brightness = std::clamp<uint8_t>(blob.brightness, 5, 100);
+        const uint8_t old_page = std::min<uint8_t>(blob->page, 2);
+        page = old_page >= 2 ? static_cast<uint8_t>(old_page + 1) : old_page;
+        brightness = std::clamp<uint8_t>(blob->brightness, 5, 100);
         last_checksum_ = 0;
     } else {
         nvs_close(handle);
@@ -114,11 +165,13 @@ esp_err_t StateCache::save_if_changed(const AppState &state, uint8_t page,
     if (!ready_) {
         return ESP_ERR_INVALID_STATE;
     }
-    CacheBlobV2 blob{};
+    static CacheBlobV3 blob{};
+    blob = {};
     blob.usage = state.usage;
     blob.radar = state.radar;
+    blob.distributed_radar = state.distributed_radar;
     blob.pet = state.pet;
-    blob.page = std::min<uint8_t>(page, 3);
+    blob.page = std::min<uint8_t>(page, 4);
     blob.brightness = std::clamp<uint8_t>(brightness, 5, 100);
     blob.checksum = checksum(blob);
     if (blob.checksum == last_checksum_) {
