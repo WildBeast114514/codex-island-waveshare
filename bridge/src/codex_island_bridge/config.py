@@ -22,6 +22,7 @@ class Settings:
     usage_interval_seconds: int = 300
     radar_interval_seconds: int = 3600
     heartbeat_interval_seconds: int = 60
+    ble_io_timeout_seconds: int = 10
     radar_api_url: str | None = None
     radar_api_token: str | None = None
     radar_allow_html: bool = False
@@ -48,6 +49,9 @@ class Settings:
             radar_interval_seconds=max(1800, int(os.environ.get("CODEX_RADAR_INTERVAL", "3600"))),
             heartbeat_interval_seconds=max(
                 15, int(os.environ.get("CODEX_HEARTBEAT_INTERVAL", "60"))
+            ),
+            ble_io_timeout_seconds=max(
+                5, int(os.environ.get("CODEX_BLE_IO_TIMEOUT", "10"))
             ),
             radar_api_url=os.environ.get("CODEX_RADAR_API_URL") or None,
             radar_api_token=os.environ.get("CODEX_RADAR_API_TOKEN") or None,

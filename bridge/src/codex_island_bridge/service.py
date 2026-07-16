@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .ble_transport import BleTransport
+from .ble_transport import BleOperationTimeout, BleTransport
 from .cache import AtomicJsonFile
 from .codex_sessions import CodexSessionAggregator
 from .codex_usage import CodexUsageProvider, UsageProviderError
@@ -268,6 +268,7 @@ class BridgeService:
         transport = BleTransport(
             address=self.settings.ble_address,
             notification_handler=self._on_device_message,
+            operation_timeout=self.settings.ble_io_timeout_seconds,
         )
         try:
             name = await transport.connect()
@@ -298,6 +299,7 @@ class BridgeService:
             transport = BleTransport(
                 address=self.settings.ble_address,
                 notification_handler=self._on_device_message,
+                operation_timeout=self.settings.ble_io_timeout_seconds,
             )
             try:
                 name = await transport.connect()
@@ -363,6 +365,11 @@ class BridgeService:
                         last_link_activity = time.monotonic()
             except asyncio.CancelledError:
                 await transport.disconnect()
+                raise
+            except BleOperationTimeout as error:
+                LOGGER.error(
+                    "%s; exiting so LaunchAgent can restart CoreBluetooth", error
+                )
                 raise
             except Exception as error:  # noqa: BLE001 - persistent service boundary
                 LOGGER.warning("Bridge connection cycle failed: %s", error)

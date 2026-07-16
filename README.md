@@ -85,7 +85,11 @@ apparently connected central sends no application traffic for 180 seconds, the
 firmware terminates the stale link and resumes advertising. This recovers the
 half-open CoreBluetooth state that can otherwise remain after a Mac sleeps.
 The intervals can be overridden with `CODEX_USAGE_INTERVAL`,
-`CODEX_RADAR_INTERVAL`, and `CODEX_HEARTBEAT_INTERVAL`.
+`CODEX_RADAR_INTERVAL`, and `CODEX_HEARTBEAT_INTERVAL`. CoreBluetooth scan,
+connect, subscription, write, and disconnect operations also have hard
+deadlines (`CODEX_BLE_IO_TIMEOUT`, 10 seconds by default). A timed-out GATT
+operation exits the Bridge so the `KeepAlive` LaunchAgent restarts it with a
+clean CoreBluetooth process instead of remaining falsely `running` after wake.
 
 The usage endpoint's windows are classified by `limit_window_seconds`, not by
 their `primary`/`secondary` position. If the service does not expose a 5-hour

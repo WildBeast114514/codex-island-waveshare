@@ -2,14 +2,46 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 NUS_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 DEVICE_NAME_PREFIX = "Codex Island-"
+LOGGER = logging.getLogger(__name__)
+T = TypeVar("T")
+
+
+class BleOperationTimeout(TimeoutError):
+    """A CoreBluetooth operation exceeded its hard deadline."""
+
+
+def _consume_task_result(task: asyncio.Task[Any]) -> None:
+    try:
+        task.result()
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
+async def _with_hard_timeout(
+    awaitable: Awaitable[T], *, timeout: float, operation: str
+) -> T:
+    """Stop waiting at the deadline even if a CoreBluetooth future ignores cancellation."""
+    task = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait({task}, timeout=timeout)
+    except asyncio.CancelledError:
+        task.cancel()
+        task.add_done_callback(_consume_task_result)
+        raise
+    if task in done:
+        return task.result()
+    task.cancel()
+    task.add_done_callback(_consume_task_result)
+    raise BleOperationTimeout(f"BLE {operation} timed out after {timeout:g}s")
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,9 +104,11 @@ class BleTransport:
         *,
         address: str | None = None,
         notification_handler: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None,
+        operation_timeout: float = 10.0,
     ) -> None:
         self.address = address
         self.notification_handler = notification_handler
+        self.operation_timeout = operation_timeout
         self._client: Any = None
         self._lines = NotificationLineBuffer()
         self._hello = asyncio.Event()
@@ -105,7 +139,9 @@ class BleTransport:
     async def connect(self, timeout: float = 20.0) -> str:
         from bleak import BleakClient
 
-        device = await self._find(timeout)
+        device = await _with_hard_timeout(
+            self._find(timeout), timeout=timeout + 1.0, operation="scan"
+        )
         self._disconnected.clear()
         self._hello.clear()
         self._client = BleakClient(
@@ -114,7 +150,9 @@ class BleTransport:
             services=[NUS_SERVICE_UUID],
             timeout=timeout,
         )
-        await self._client.connect()
+        await _with_hard_timeout(
+            self._client.connect(), timeout=timeout, operation="connect"
+        )
 
         async def dispatch(message: dict[str, Any]) -> None:
             if message.get("v") == 1 and message.get("k") == "hello":
@@ -128,7 +166,11 @@ class BleTransport:
             for message in self._lines.feed(bytes(data)):
                 asyncio.create_task(dispatch(message))
 
-        await self._client.start_notify(NUS_TX_UUID, notification)
+        await _with_hard_timeout(
+            self._client.start_notify(NUS_TX_UUID, notification),
+            timeout=self.operation_timeout,
+            operation="notification setup",
+        )
         return device.name or device.address
 
     async def wait_for_hello(self, timeout: float = 5.0) -> None:
@@ -145,14 +187,28 @@ class BleTransport:
             int(getattr(characteristic, "max_write_without_response_size", 180) or 180),
         )
         for offset in range(0, len(payload), maximum):
-            await self._client.write_gatt_char(
-                NUS_RX_UUID, payload[offset : offset + maximum], response=True
+            await _with_hard_timeout(
+                self._client.write_gatt_char(
+                    NUS_RX_UUID, payload[offset : offset + maximum], response=True
+                ),
+                timeout=self.operation_timeout,
+                operation="write",
             )
 
     async def disconnect(self) -> None:
-        if self._client is not None and self._client.is_connected:
-            await self._client.disconnect()
+        client = self._client
         self._client = None
+        self._disconnected.set()
+        if client is None or not client.is_connected:
+            return
+        try:
+            await _with_hard_timeout(
+                client.disconnect(),
+                timeout=min(5.0, self.operation_timeout),
+                operation="disconnect",
+            )
+        except BleOperationTimeout as error:
+            LOGGER.warning("%s; abandoning stale client", error)
 
     async def wait_for_disconnect(self) -> None:
         await self._disconnected.wait()
