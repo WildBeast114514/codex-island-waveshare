@@ -184,7 +184,7 @@ void protocol_task(void *) {
                 set_link_connected(false);
             } else if (event == LinkEvent::kSubscribed) {
                 const bool sent = codex_island::transport::ble_nus::notify_json_line(
-                    "{\"v\":1,\"k\":\"hello\",\"fw\":\"0.1.0\"}");
+                    "{\"v\":1,\"k\":\"hello\",\"fw\":\"0.2.0\"}");
                 ESP_LOGI(kTag, "hello notification %s", sent ? "sent" : "failed");
             }
         }

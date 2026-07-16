@@ -9,10 +9,12 @@ htmlcov/
 bridge/build/
 
 firmware/build/
+firmware/generated/
 firmware/managed_components/
 firmware/sdkconfig
 firmware/sdkconfig.old
 
+assets/pets/.cache/
 backups/*.bin
 backups/*.sha256
 logs/*.log

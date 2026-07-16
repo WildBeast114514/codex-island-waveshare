@@ -21,6 +21,7 @@ class Settings:
     codex_sessions_dir: Path
     usage_interval_seconds: int = 300
     radar_interval_seconds: int = 3600
+    pet_interval_seconds: int = 2
     heartbeat_interval_seconds: int = 60
     ble_io_timeout_seconds: int = 10
     radar_api_url: str | None = None
@@ -47,6 +48,9 @@ class Settings:
             ),
             usage_interval_seconds=max(30, int(os.environ.get("CODEX_USAGE_INTERVAL", "300"))),
             radar_interval_seconds=max(1800, int(os.environ.get("CODEX_RADAR_INTERVAL", "3600"))),
+            pet_interval_seconds=max(
+                1, int(os.environ.get("CODEX_PET_INTERVAL", "2"))
+            ),
             heartbeat_interval_seconds=max(
                 15, int(os.environ.get("CODEX_HEARTBEAT_INTERVAL", "60"))
             ),

@@ -67,6 +67,10 @@ AppState make_static_mock_state() {
     state.power.battery_present = true;
     state.power.charging = false;
     state.power.usb_present = true;
+    state.pet.valid = true;
+    state.pet.activity = PetActivity::kRunning;
+    state.pet.active_tasks = 1;
+    state.pet.updated_at = 1'700'000'000;
     return state;
 }
 

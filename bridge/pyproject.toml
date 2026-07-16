@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-island-bridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "macOS data and BLE bridge for Codex Island"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,6 +12,7 @@ dependencies = [
   "beautifulsoup4>=4.12",
   "bleak>=0.22",
   "certifi>=2025.1",
+  "Pillow>=11.0",
   "platformdirs>=4.3",
   "requests>=2.32",
 ]
@@ -31,4 +32,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]
-

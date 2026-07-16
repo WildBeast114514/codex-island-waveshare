@@ -57,11 +57,27 @@ struct PowerState {
     bool usb_present = false;
 };
 
+enum class PetActivity : uint8_t {
+    kIdle = 0,
+    kRunning,
+    kWaiting,
+    kReview,
+    kFailed,
+};
+
+struct PetState {
+    bool valid = false;
+    PetActivity activity = PetActivity::kIdle;
+    uint8_t active_tasks = 0;
+    int64_t updated_at = 0;
+};
+
 struct AppState {
     UsageState usage;
     RadarState radar;
     LinkState link;
     PowerState power;
+    PetState pet;
 };
 
 class AppStateStore {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,3 +36,12 @@ class RadarSnapshot:
     stale: bool = False
     trend_iq_x10: tuple[int, ...] = field(default_factory=tuple)
 
+
+PetActivity = Literal["idle", "running", "waiting", "review", "failed"]
+
+
+@dataclass(frozen=True, slots=True)
+class PetSnapshot:
+    updated_at: int
+    state: PetActivity = "idle"
+    active_tasks: int = 0

@@ -10,11 +10,12 @@ from typing import Any
 
 from .ble_transport import BleOperationTimeout, BleTransport
 from .cache import AtomicJsonFile
+from .codex_pet import CodexPetProvider
 from .codex_sessions import CodexSessionAggregator
 from .codex_usage import CodexUsageProvider, UsageProviderError
 from .config import Settings
-from .models import RadarModel, RadarSnapshot, UsageSnapshot
-from .protocol import Sequence, heartbeat_line, radar_line, usage_line
+from .models import PetSnapshot, RadarModel, RadarSnapshot, UsageSnapshot
+from .protocol import Sequence, heartbeat_line, pet_line, radar_line, usage_line
 from .radar import (
     AuthorizedApiRadarProvider,
     HtmlRadarProvider,
@@ -220,6 +221,7 @@ class BridgeService:
         self.settings = settings
         self.usage = UsageService(settings)
         self.radar = RadarService(settings)
+        self.pet = CodexPetProvider(settings.codex_sessions_dir)
         self.sequence = Sequence()
         self.refresh = asyncio.Event()
 
@@ -261,6 +263,12 @@ class BridgeService:
     async def send_radar(self, transport: BleTransport, snapshot: RadarSnapshot) -> None:
         await transport.send_line(radar_line(snapshot, self.sequence.next()))
 
+    async def collect_pet(self) -> PetSnapshot:
+        return await asyncio.to_thread(self.pet.collect)
+
+    async def send_pet(self, transport: BleTransport, snapshot: PetSnapshot) -> None:
+        await transport.send_line(pet_line(snapshot, self.sequence.next()))
+
     async def send_heartbeat(self, transport: BleTransport) -> None:
         await transport.send_line(heartbeat_line(self.sequence.next()))
 
@@ -289,6 +297,9 @@ class BridgeService:
             if radar is not None:
                 await self.send_radar(transport, radar)
                 LOGGER.info("Pushed current Radar")
+            pet = await self.collect_pet()
+            await self.send_pet(transport, pet)
+            LOGGER.info("Pushed Codex pet state: %s", pet.state)
             return snapshot
         finally:
             await transport.disconnect()
@@ -316,6 +327,8 @@ class BridgeService:
                     LOGGER.info("Pushed cached Radar")
                 last_usage_refresh = 0.0
                 last_radar_refresh = 0.0
+                last_pet_refresh = 0.0
+                last_pet_snapshot: PetSnapshot | None = None
                 last_link_activity = time.monotonic()
                 while transport.connected:
                     now = time.monotonic()
@@ -327,13 +340,17 @@ class BridgeService:
                         0.0,
                         self.settings.radar_interval_seconds - (now - last_radar_refresh),
                     )
+                    pet_due = max(
+                        0.0,
+                        self.settings.pet_interval_seconds - (now - last_pet_refresh),
+                    )
                     heartbeat_due = max(
                         0.0,
                         self.settings.heartbeat_interval_seconds
                         - (now - last_link_activity),
                     )
                     trigger = await self._wait_for_trigger(
-                        transport, min(usage_due, radar_due, heartbeat_due)
+                        transport, min(usage_due, radar_due, pet_due, heartbeat_due)
                     )
                     if trigger == "disconnect":
                         LOGGER.info("Peripheral disconnected")
@@ -356,6 +373,22 @@ class BridgeService:
                             last_link_activity = time.monotonic()
                             LOGGER.info("Pushed current Radar")
                         last_radar_refresh = now
+                    if (
+                        pet_due <= 0
+                        or now - last_pet_refresh
+                        >= self.settings.pet_interval_seconds
+                    ):
+                        pet = await self.collect_pet()
+                        if (
+                            last_pet_snapshot is None
+                            or pet.state != last_pet_snapshot.state
+                            or pet.active_tasks != last_pet_snapshot.active_tasks
+                        ):
+                            await self.send_pet(transport, pet)
+                            last_link_activity = time.monotonic()
+                            last_pet_snapshot = pet
+                            LOGGER.info("Pushed Codex pet state: %s", pet.state)
+                        last_pet_refresh = now
                     now = time.monotonic()
                     if (
                         now - last_link_activity

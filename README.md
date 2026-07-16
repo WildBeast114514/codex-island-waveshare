@@ -2,7 +2,10 @@
 
 Native 466x466 LVGL 9 status display for the Waveshare ESP32-S3-Touch-AMOLED-1.75C, backed by a local macOS Codex bridge. It supports both the USB-only and battery-equipped board variants.
 
-The three touch pages show Codex usage, dynamic CodexRadar model IQ, and link/power/trend status. Credentials and network requests stay on the Mac; the ESP32 receives only compact derived snapshots over BLE Nordic UART Service.
+The four touch pages show Codex usage, dynamic CodexRadar model IQ,
+link/power/trend status, and an animated Codex pet. Credentials and network
+requests stay on the Mac; the ESP32 receives only compact derived snapshots
+over BLE Nordic UART Service.
 
 ## Hardware baseline status
 
@@ -60,7 +63,7 @@ scripts/flash_firmware.sh
 Set `MONITOR=1` when running the flash script from an interactive terminal to
 continue into the serial monitor.
 
-The firmware starts with the last valid Usage/Radar snapshot from NVS, then
+The firmware starts with the last valid Usage/Radar/pet snapshot from NVS, then
 advertises as `Codex Island-XXXX`. It never stores Codex credentials. The
 tested unit advertises as `Codex Island-570E`.
 
@@ -72,6 +75,7 @@ Python environment and inspect real local data:
 ```bash
 scripts/bootstrap_macos.sh
 .venv/bin/codex-island-bridge print
+.venv/bin/codex-island-bridge pet-status
 .venv/bin/codex-island-bridge devices
 CODEX_RADAR_ALLOW_HTML=1 .venv/bin/codex-island-bridge radar-test
 .venv/bin/codex-island-bridge once
@@ -79,14 +83,17 @@ CODEX_RADAR_ALLOW_HTML=1 .venv/bin/codex-island-bridge radar-test
 ```
 
 The background Bridge collects and pushes Codex usage every 300 seconds and
-Radar every 3600 seconds. It also sends a data-neutral BLE heartbeat every 60
-seconds; heartbeats do not change the Status page's `Last sync` time. If an
+Radar every 3600 seconds. It checks local Codex lifecycle events every two
+seconds and pushes pet data only when the aggregate state or active-task count
+changes. It also sends a data-neutral BLE heartbeat every 60 seconds;
+heartbeats do not change the Status page's `Last sync` time. If an
 apparently connected central sends no application traffic for 180 seconds, the
 firmware terminates the stale link and resumes advertising. This recovers the
 half-open CoreBluetooth state that can otherwise remain after a Mac sleeps.
 The intervals can be overridden with `CODEX_USAGE_INTERVAL`,
-`CODEX_RADAR_INTERVAL`, and `CODEX_HEARTBEAT_INTERVAL`. CoreBluetooth scan,
-connect, subscription, write, and disconnect operations also have hard
+`CODEX_RADAR_INTERVAL`, `CODEX_PET_INTERVAL`, and
+`CODEX_HEARTBEAT_INTERVAL`. CoreBluetooth scan, connect, subscription, write,
+and disconnect operations also have hard
 deadlines (`CODEX_BLE_IO_TIMEOUT`, 10 seconds by default). A timed-out GATT
 operation exits the Bridge so the `KeepAlive` LaunchAgent restarts it with a
 clean CoreBluetooth process instead of remaining falsely `running` after wake.
@@ -104,6 +111,31 @@ silent production fallback. Family/effort labels are data, so current names such
 as Sol/Terra/Luna may change without a firmware update. Trend selection can be
 overridden with `CODEX_RADAR_PRIMARY_KEY`; a missing/renamed key falls back to
 the highest IQ in each historical sample.
+
+## Codex pet page
+
+The fourth page renders a build-time converted sprite sheet directly through
+native 466×466 LVGL. Mambo is the default asset. The Bridge maps local Codex
+lifecycle events to generic pet states:
+
+- `task_started` or recent task activity → Running;
+- an unresolved user-input or permission request → Needs input;
+- `task_complete` → Ready for five minutes;
+- `turn_aborted` → Blocked for five minutes;
+- otherwise → Idle.
+
+The status adapter is separate from the artwork. To use another Codex-style
+WebP pet, copy `assets/pets/mambo.json`, change the source/hash and frame rows,
+then build with:
+
+```bash
+CODEX_PET_MANIFEST="$PWD/assets/pets/my-pet.json" scripts/build_firmware.sh
+```
+
+The converter verifies SHA-256, quantizes a shared RGBA palette, applies
+optional integer nearest-neighbor scaling, and packs RLE-compressed frames.
+Firmware decodes one frame at a time into PSRAM; it does not include a WebP
+decoder and does not scale a low-resolution UI canvas.
 
 ## Login autostart
 
@@ -128,7 +160,7 @@ rm -rf ~/Library/Application\ Support/CodexIsland/bridge-runtime
 
 ## Controls and power policy
 
-- Swipe left/right or tap a page dot to switch Usage, Radar and Status.
+- Swipe left/right or tap a page dot to switch Usage, Radar, Status and Pet.
 - Scroll up/down inside Radar to browse every IQ model received (up to 24);
   horizontal swipes still switch pages. The header shows the source data's
   Mac-local update time.
@@ -147,7 +179,7 @@ Bridge JSON writes use temporary files, `fsync`, and atomic rename. Radar HTML
 is limited to one request per 30 minutes (normally hourly), uses conditional
 HTTP headers when available, and becomes stale after 18 hours. Failed network
 or parse attempts retain the last valid snapshot. ESP32 NVS writes only when
-Usage, Radar, page, or brightness content changes.
+Usage, Radar, pet, page, or brightness content changes.
 
 Third-party sources and licenses are documented in `LICENSES.md` and locked in
 `reference/LOCKFILE.md`.

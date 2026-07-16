@@ -9,6 +9,7 @@ namespace codex_island::protocol {
 enum class ProcessResult {
     kAppliedUsage,
     kAppliedRadar,
+    kAppliedPet,
     kHeartbeat,
     kDuplicate,
     kInvalid,
@@ -23,6 +24,7 @@ public:
 private:
     uint32_t last_usage_sequence_ = 0;
     uint32_t last_radar_sequence_ = 0;
+    uint32_t last_pet_sequence_ = 0;
 };
 
 const char *result_name(ProcessResult result);

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from .models import RadarSnapshot, UsageSnapshot
+from .models import PetSnapshot, RadarSnapshot, UsageSnapshot
 
 PROTOCOL_VERSION = 1
 MAX_LINE_BYTES = 2048
@@ -85,6 +85,23 @@ def radar_line(snapshot: RadarSnapshot, seq: int) -> bytes:
                 for model in ordered
             ],
             "trend": list(snapshot.trend_iq_x10[-12:]),
+        }
+    )
+
+
+def pet_line(snapshot: PetSnapshot, seq: int) -> bytes:
+    if snapshot.state not in {"idle", "running", "waiting", "review", "failed"}:
+        raise ProtocolError(f"unknown pet state: {snapshot.state}")
+    if not 0 <= snapshot.active_tasks <= 255:
+        raise ProtocolError("pet active_tasks must fit in one byte")
+    return _line(
+        {
+            "v": PROTOCOL_VERSION,
+            "k": "pet",
+            "seq": seq,
+            "ts": snapshot.updated_at,
+            "state": snapshot.state,
+            "active": snapshot.active_tasks,
         }
     )
 

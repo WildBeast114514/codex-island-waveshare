@@ -242,11 +242,42 @@ bool parse_radar(cJSON *root, int64_t timestamp, RadarState &radar) {
     return true;
 }
 
+bool parse_pet(cJSON *root, int64_t timestamp, PetState &pet) {
+    const cJSON *state = cJSON_GetObjectItemCaseSensitive(root, "state");
+    int64_t active_tasks = 0;
+    if (!cJSON_IsString(state) || state->valuestring == nullptr ||
+        !read_integer(root, "active", 0, 255, active_tasks)) {
+        return false;
+    }
+
+    PetActivity activity = PetActivity::kIdle;
+    if (std::strcmp(state->valuestring, "idle") == 0) {
+        activity = PetActivity::kIdle;
+    } else if (std::strcmp(state->valuestring, "running") == 0) {
+        activity = PetActivity::kRunning;
+    } else if (std::strcmp(state->valuestring, "waiting") == 0) {
+        activity = PetActivity::kWaiting;
+    } else if (std::strcmp(state->valuestring, "review") == 0) {
+        activity = PetActivity::kReview;
+    } else if (std::strcmp(state->valuestring, "failed") == 0) {
+        activity = PetActivity::kFailed;
+    } else {
+        return false;
+    }
+
+    pet.valid = true;
+    pet.activity = activity;
+    pet.active_tasks = static_cast<uint8_t>(active_tasks);
+    pet.updated_at = timestamp;
+    return true;
+}
+
 }  // namespace
 
 void ProtocolProcessor::begin_session() {
     last_usage_sequence_ = 0;
     last_radar_sequence_ = 0;
+    last_pet_sequence_ = 0;
 }
 
 ProcessResult ProtocolProcessor::process_line(const char *line,
@@ -304,6 +335,24 @@ ProcessResult ProtocolProcessor::process_line(const char *line,
         last_radar_sequence_ = sequence;
         return ProcessResult::kAppliedRadar;
     }
+    if (std::strcmp(kind, "pet") == 0) {
+        if (sequence <= last_pet_sequence_) {
+            store.update([monotonic_seconds](AppState &state) {
+                state.link.last_packet_at = monotonic_seconds;
+            });
+            return ProcessResult::kDuplicate;
+        }
+        PetState pet{};
+        if (!parse_pet(root, timestamp, pet)) {
+            return ProcessResult::kInvalid;
+        }
+        store.update([&pet, monotonic_seconds](AppState &state) {
+            state.pet = pet;
+            state.link.last_packet_at = monotonic_seconds;
+        });
+        last_pet_sequence_ = sequence;
+        return ProcessResult::kAppliedPet;
+    }
     return ProcessResult::kInvalid;
 }
 
@@ -313,6 +362,8 @@ const char *result_name(ProcessResult result) {
             return "usage applied";
         case ProcessResult::kAppliedRadar:
             return "radar applied";
+        case ProcessResult::kAppliedPet:
+            return "pet applied";
         case ProcessResult::kHeartbeat:
             return "heartbeat";
         case ProcessResult::kDuplicate:

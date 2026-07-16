@@ -3,11 +3,20 @@ from __future__ import annotations
 import json
 import re
 
-from codex_island_bridge.models import RadarModel, RadarSnapshot, UsageSnapshot
+import pytest
+
+from codex_island_bridge.models import (
+    PetSnapshot,
+    RadarModel,
+    RadarSnapshot,
+    UsageSnapshot,
+)
 from codex_island_bridge.protocol import (
     MAX_LINE_BYTES,
+    ProtocolError,
     Sequence,
     heartbeat_line,
+    pet_line,
     radar_line,
     usage_line,
 )
@@ -80,3 +89,25 @@ def test_heartbeat_has_no_data_timestamp_side_effects() -> None:
         "seq": 7,
         "ts": 1_234,
     }
+
+
+def test_pet_state_protocol_is_dynamic_and_compact() -> None:
+    assert decoded(
+        pet_line(
+            PetSnapshot(updated_at=1_234, state="waiting", active_tasks=2),
+            8,
+        )
+    ) == {
+        "v": 1,
+        "k": "pet",
+        "seq": 8,
+        "ts": 1_234,
+        "state": "waiting",
+        "active": 2,
+    }
+
+
+def test_unknown_pet_state_is_rejected() -> None:
+    snapshot = PetSnapshot(updated_at=1_234, state="dancing", active_tasks=0)  # type: ignore[arg-type]
+    with pytest.raises(ProtocolError, match="unknown pet state"):
+        pet_line(snapshot, 1)

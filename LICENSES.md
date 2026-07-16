@@ -34,6 +34,17 @@ excluded from Git; exact commits are recorded in `reference/LOCKFILE.md`.
 - LVGL: <https://github.com/lvgl/lvgl>, MIT License.
 - Use: ESP32-S3 runtime/toolchain, NimBLE, NVS, cJSON, FreeRTOS and LVGL 9.5.
 
+## Mambo Codex pet
+
+- Source: <https://codex-pet.com/pets/mambo>
+- Sprite sheet: <https://cdn.codex-pet.com/pets/mambo/spritesheet.webp>
+- Use: default demonstration asset for the generic build-time WebP pet
+  converter. The source WebP is downloaded into an ignored cache after its
+  SHA-256 is verified; it is not committed to this repository.
+- License: no explicit redistribution license was published with the downloaded
+  pet package when integrated. Replace the manifest for redistribution contexts
+  that require an explicitly licensed artwork asset.
+
 Codex and OpenAI names are used only to identify the compatible local service.
 This project is independent and is not affiliated with or endorsed by OpenAI,
 Waveshare, or CodexRadar.

@@ -7,8 +7,9 @@ import logging
 import sys
 
 from .ble_transport import BleTransport, discover_devices
+from .codex_pet import CodexPetProvider
 from .config import Settings
-from .protocol import Sequence, mock_snapshots, radar_line, usage_line
+from .protocol import Sequence, mock_snapshots, pet_line, radar_line, usage_line
 from .service import BridgeService, RadarService, UsageService
 
 
@@ -67,6 +68,12 @@ def _radar_test(settings: Settings) -> int:
     return 0
 
 
+def _pet_status(settings: Settings) -> int:
+    snapshot = CodexPetProvider(settings.codex_sessions_dir).collect()
+    print(json.dumps(json.loads(pet_line(snapshot, 1)), ensure_ascii=False, indent=2))
+    return 0
+
+
 async def _once(settings: Settings) -> int:
     await BridgeService(settings).once()
     return 0
@@ -89,6 +96,7 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("once", help="connect, push current data, and exit")
     commands.add_parser("run", help="run the reconnecting background bridge")
     commands.add_parser("radar-test", help="print the deterministic Radar protocol fixture")
+    commands.add_parser("pet-status", help="print the inferred local Codex pet state")
     return root
 
 
@@ -112,6 +120,8 @@ def main(argv: list[str] | None = None) -> None:
             code = asyncio.run(_run(settings))
         elif args.command == "radar-test":
             code = _radar_test(settings)
+        elif args.command == "pet-status":
+            code = _pet_status(settings)
         else:
             code = _print_mock()
     except (TimeoutError, ConnectionError, OSError) as error:

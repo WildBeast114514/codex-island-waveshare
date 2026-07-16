@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "id": "mambo",
+  "display_name": "Mambo",
+  "source": {
+    "url": "https://cdn.codex-pet.com/pets/mambo/spritesheet.webp",
+    "sha256": "bf40a1330a1151457516cc51ca76cb10097920cae07becc21d5882c8d84a1977"
+  },
+  "sheet": {
+    "columns": 8,
+    "rows": 9,
+    "output_scale": 2,
+    "alpha_threshold": 8,
+    "palette_colors": 255
+  },
+  "animations": [
+    {
+      "name": "idle",
+      "row": 0,
+      "frames": 6,
+      "frame_ms": 180
+    },
+    {
+      "name": "run_right",
+      "row": 1,
+      "frames": 8,
+      "frame_ms": 100
+    },
+    {
+      "name": "run_left",
+      "row": 2,
+      "frames": 8,
+      "frame_ms": 100
+    },
+    {
+      "name": "waving",
+      "row": 3,
+      "frames": 4,
+      "frame_ms": 160
+    },
+    {
+      "name": "jumping",
+      "row": 4,
+      "frames": 5,
+      "frame_ms": 120
+    },
+    {
+      "name": "failed",
+      "row": 5,
+      "frames": 8,
+      "frame_ms": 160
+    },
+    {
+      "name": "waiting",
+      "row": 6,
+      "frames": 6,
+      "frame_ms": 220
+    },
+    {
+      "name": "running",
+      "row": 7,
+      "frames": 6,
+      "frame_ms": 110
+    },
+    {
+      "name": "review",
+      "row": 8,
+      "frames": 6,
+      "frame_ms": 170
+    }
+  ]
+}
