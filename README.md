@@ -199,6 +199,11 @@ rm -rf ~/Library/Application\ Support/CodexIsland/bridge-runtime
 - BOOT short press advances a page; double press requests immediate refresh.
 - PWR short press toggles display brightness; PMIC long-press behavior is left intact.
 - USB: 35% brightness, page rotation every 15 seconds after 60 seconds without interaction, and a 1–2 pixel shift every five minutes.
+- Mac sleep/Bridge loss: turn the display off 15 seconds after a real BLE
+  disconnect, or after 150 seconds without a valid application heartbeat on a
+  half-open connection. A valid heartbeat/data packet after wake turns back on
+  only a display that this policy turned off; a PWR-initiated manual screen-off
+  remains respected. Touch or a button provides a 30-second offline wake grace.
 - Battery: dim after 30 seconds and turn the AMOLED off after 120 seconds; touch or a button wakes it.
 
 ## Data and cache behavior

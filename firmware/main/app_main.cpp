@@ -17,6 +17,7 @@
 #include "model/app_state.hpp"
 #include "input/input_manager.hpp"
 #include "input/orientation_manager.hpp"
+#include "power/display_link_policy.hpp"
 #include "power/power_manager.hpp"
 #include "protocol/protocol.hpp"
 #include "storage/state_cache.hpp"
@@ -48,6 +49,9 @@ std::atomic<uint8_t> g_configured_brightness{35};
 std::atomic<uint8_t> g_actual_brightness{35};
 std::atomic<int16_t> g_brightness_request{-1};
 std::atomic<int64_t> g_last_ble_activity{0};
+std::atomic<int64_t> g_last_valid_ble_activity{0};
+std::atomic<int64_t> g_link_state_changed_at{0};
+std::atomic<bool> g_screen_auto_slept_by_link{false};
 std::atomic<int8_t> g_rotation_request{-1};
 lv_display_t *g_display = nullptr;
 
@@ -163,6 +167,7 @@ void set_screen_on(bool enabled) {
 }
 
 void set_link_connected(bool connected) {
+    g_link_state_changed_at.store(esp_timer_get_time() / 1'000'000);
     g_state.update([connected](codex_island::AppState &state) {
         state.link.ble_connected = connected;
     });
@@ -184,7 +189,7 @@ void protocol_task(void *) {
                 set_link_connected(false);
             } else if (event == LinkEvent::kSubscribed) {
                 const bool sent = codex_island::transport::ble_nus::notify_json_line(
-                "{\"v\":1,\"k\":\"hello\",\"fw\":\"0.3.0\"}");
+                "{\"v\":1,\"k\":\"hello\",\"fw\":\"0.3.1\"}");
                 ESP_LOGI(kTag, "hello notification %s", sent ? "sent" : "failed");
             }
         }
@@ -200,6 +205,11 @@ void protocol_task(void *) {
         if (result == codex_island::protocol::ProcessResult::kInvalid) {
             ESP_LOGE(kTag, "invalid BLE protocol line; previous state retained");
         } else {
+            g_last_valid_ble_activity.store(now);
+            if (g_screen_auto_slept_by_link.exchange(false)) {
+                g_wake_screen.store(true);
+                ESP_LOGI(kTag, "Bridge activity resumed; waking display");
+            }
             ESP_LOGI(kTag, "BLE protocol: %s; protocol stack free=%u",
                      codex_island::protocol::result_name(result),
                      static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
@@ -238,6 +248,7 @@ void power_input_task(void *) {
         const codex_island::power::PowerKeyEvent power_key = g_power.poll_key();
         if (power_key == codex_island::power::PowerKeyEvent::kShort) {
             g_last_activity.store(now_seconds);
+            g_screen_auto_slept_by_link.store(false);
             g_toggle_screen.store(true);
         } else if (power_key == codex_island::power::PowerKeyEvent::kLong) {
             ESP_LOGI(kTag, "AXP2101 long-press observed; PMIC behavior preserved");
@@ -291,7 +302,22 @@ void power_input_task(void *) {
         const codex_island::AppState snapshot = g_state.snapshot();
         const int64_t idle_seconds =
             std::max<int64_t>(0, now_seconds - g_last_activity.load());
-        if (snapshot.power.usb_present) {
+        const bool bridge_link_should_sleep =
+            codex_island::power::bridge_link_should_sleep_display(
+                snapshot.link.ble_connected,
+                g_last_valid_ble_activity.load(),
+                g_link_state_changed_at.load(), g_last_activity.load(),
+                now_seconds);
+        if (bridge_link_should_sleep && g_screen_on.load()) {
+            g_screen_auto_slept_by_link.store(true);
+            ESP_LOGI(kTag,
+                     "Bridge unavailable; auto-sleeping display "
+                     "(BLE=%s, valid activity age=%llds)",
+                     snapshot.link.ble_connected ? "connected" : "disconnected",
+                     static_cast<long long>(std::max<int64_t>(
+                         0, now_seconds - g_last_valid_ble_activity.load())));
+            set_screen_on(false);
+        } else if (snapshot.power.usb_present) {
             if (g_screen_on.load()) {
                 set_display_brightness(g_configured_brightness.load());
             }
@@ -374,7 +400,9 @@ extern "C" void app_main(void) {
         ESP_LOGE(kTag, "AXP2101 unavailable: %s", esp_err_to_name(power_result));
     }
     ESP_ERROR_CHECK(g_input.begin());
-    g_last_activity.store(esp_timer_get_time() / 1'000'000);
+    const int64_t startup_seconds = esp_timer_get_time() / 1'000'000;
+    g_last_activity.store(startup_seconds);
+    g_link_state_changed_at.store(startup_seconds);
 
     ESP_ERROR_CHECK(bsp_display_lock(static_cast<uint32_t>(-1)));
     g_ui.begin(&g_state, initial_page, initial_brightness);

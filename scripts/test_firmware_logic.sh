@@ -21,6 +21,12 @@ trap 'rm -rf "$OUTPUT_DIR"' EXIT
 
 "$CXX" -std=c++17 -Wall -Wextra -Werror \
     -I"$ROOT/firmware/main" \
+    "$ROOT/firmware/tests/display_link_policy_test.cpp" \
+    -o "$OUTPUT_DIR/display_link_policy_test"
+"$OUTPUT_DIR/display_link_policy_test"
+
+"$CXX" -std=c++17 -Wall -Wextra -Werror \
+    -I"$ROOT/firmware/main" \
     "$ROOT/firmware/main/input/orientation_logic.cpp" \
     "$ROOT/firmware/tests/orientation_logic_test.cpp" \
     -o "$OUTPUT_DIR/orientation_logic_test"
